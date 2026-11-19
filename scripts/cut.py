@@ -49,7 +49,14 @@ def wrap(text, width):
             lines.append(cur); cur = wd
         else:
             cur = (cur + ' ' + wd).strip()
-    return lines + ([cur] if cur else [])
+    lines = lines + ([cur] if cur else [])
+    if len(lines) == 2:  # even out two lines: no single word left stranded on the second line
+        ws = text.split()
+        best = min(range(1, len(ws)), key=lambda i: max(len(' '.join(ws[:i])), len(' '.join(ws[i:]))))
+        a, b = ' '.join(ws[:best]), ' '.join(ws[best:])
+        if max(len(a), len(b)) <= width:
+            lines = [a, b]
+    return lines
 
 
 def build_ass(words, s0, e0, hook, cap_y, title=None, caps='word', profanity=False):
