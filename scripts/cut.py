@@ -263,6 +263,10 @@ def main():
             title = ('box', a.title, TOP, a.title_secs)
         else:
             title = ('outline', a.title, TOP, a.title_secs)
+            # captions right under the title, near the seam: clear of the face, high enough to be seen
+            cap_y = TOP + n * 78 + 110
+    elif layout == 'react':
+        cap_y = TOP  # no title: captions sit on the seam
     ass = out / f"clip_{a.pick}.ass"
     caps = a.captions
     cap_words = words if caps != 'none' else []
