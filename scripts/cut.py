@@ -217,6 +217,8 @@ def main():
     ap.add_argument("--allow-profanity", action="store_true", help="keep swear words in captions (slurs are always masked)")
     ap.add_argument("--cam", default="auto", help="auto (find the webcam) or x:y:w:h fractions")
     ap.add_argument("--start", type=float); ap.add_argument("--end", type=float)
+    ap.add_argument("--skip-gameplay-check", action="store_true",
+                    help="react: trust that the game is on screen (the check misfires on webcams with no border)")
     a = ap.parse_args()
     d = Path(a.job); c = load_json(d / "candidates.json")
     pick = next(x for x in c["candidates"] if x["n"] == a.pick)
@@ -233,7 +235,7 @@ def main():
                      "React clips need the game on screen with the cam as a separate box. Pick another moment or stream.")
         if layout == 'react':
             from facecam import has_gameplay, face_crop_expr
-            if not has_gameplay(c['source'], s0, e0, r['box']):
+            if not a.skip_gameplay_check and not has_gameplay(c['source'], s0, e0, r['box']):
                 sys.exit("skipped: the area outside the webcam is not gameplay (same scene or no game on screen). "
                          "Pick a moment where GTA 6 is on screen.")
             if r.get('mode') == 'face' and r.get('face_track'):
