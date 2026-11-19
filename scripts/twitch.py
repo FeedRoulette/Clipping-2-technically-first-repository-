@@ -1,7 +1,7 @@
 """Twitch helpers that need no account and no API key.
 
 top_streams(): Twitch's public web GQL endpoint with the public web Client-Id (same one yt-dlp uses).
-irc_chat():    anonymous IRC read-only chat (justinfan nick, no password).
+irc_chat():    anonymous read-only chat (justinfan nick, no password): IRC over WebSocket, raw IRC as fallback.
 vod_chat():    not implemented, see note at the bottom.
 """
 import json, random, socket, ssl, sys, threading, time
@@ -92,46 +92,90 @@ def _parse_privmsg(line):
     return user, text.strip()
 
 
+def _handle_lines(lines, out, send):
+    for s in lines:
+        if not s:
+            continue
+        if s.startswith("PING"):
+            send("PONG" + s[4:])
+            continue
+        m = _parse_privmsg(s)
+        if m and m[1]:
+            out.write(json.dumps({"t": time.time(), "user": m[0], "text": m[1]}, ensure_ascii=False) + "\n")
+
+
+def _ws_session(channel, out, stop_event):
+    """IRC over WebSocket (wss://irc-ws.chat.twitch.tv:443). Port 443 gets through firewalls and HTTPS proxies
+    (websocket-client honours HTTPS_PROXY) where the raw IRC ports are blocked. Returns True if it connected."""
+    import websocket
+    ws = websocket.create_connection("wss://irc-ws.chat.twitch.tv:443", timeout=15)
+    try:
+        ws.settimeout(5)
+        ws.send(f"NICK justinfan{random.randint(10000, 99999)}")
+        ws.send(f"JOIN #{channel}")
+        while not stop_event.is_set():
+            try:
+                msg = ws.recv()
+            except websocket.WebSocketTimeoutException:
+                continue
+            if not msg:
+                break
+            _handle_lines(msg.split("\r\n"), out, lambda x: ws.send(x))
+    finally:
+        try: ws.close()
+        except Exception: pass
+    return True
+
+
+def _raw_session(channel, out, stop_event, host, port, use_tls):
+    raw = socket.create_connection((host, port if use_tls else 6667), timeout=15)
+    sock = ssl.create_default_context().wrap_socket(raw, server_hostname=host) if use_tls else raw
+    try:
+        sock.settimeout(5)
+        sock.sendall(f"NICK justinfan{random.randint(10000, 99999)}\r\n".encode())
+        sock.sendall(f"JOIN #{channel}\r\n".encode())
+        buf = b""
+        while not stop_event.is_set():
+            try:
+                data = sock.recv(4096)
+            except socket.timeout:
+                continue
+            if not data:
+                break
+            buf += data
+            *lines, buf = buf.split(b"\r\n")
+            _handle_lines([ln.decode("utf-8", "replace") for ln in lines], out,
+                          lambda x: sock.sendall((x + "\r\n").encode()))
+    finally:
+        try: sock.close()
+        except OSError: pass
+
+
 def irc_chat(channel, out_path, stop_event=None, host="irc.chat.twitch.tv", port=6697):
     """Append {t, user, text} JSON lines to out_path until stop_event is set. Reconnects on drop.
-    Uses TLS (6697); falls back to plain 6667 if TLS fails."""
+    Tries IRC over WebSocket (443) first, then raw IRC over TLS (6697), then plain 6667."""
     stop_event = stop_event or threading.Event()
     channel = channel.lower().lstrip("#")
-    use_tls = True
+    modes = ["ws", "tls", "plain"]
+    try:
+        import websocket  # noqa: F401
+    except ImportError:
+        modes.remove("ws")
+    i = 0
     with open(out_path, "a", encoding="utf-8", buffering=1) as out:
         while not stop_event.is_set():
-            sock = None
+            mode = modes[i % len(modes)]
+            ok = False
             try:
-                raw = socket.create_connection((host, port if use_tls else 6667), timeout=15)
-                sock = ssl.create_default_context().wrap_socket(raw, server_hostname=host) if use_tls else raw
-                sock.settimeout(5)
-                sock.sendall(f"NICK justinfan{random.randint(10000, 99999)}\r\n".encode())
-                sock.sendall(f"JOIN #{channel}\r\n".encode())
-                buf = b""
-                while not stop_event.is_set():
-                    try:
-                        data = sock.recv(4096)
-                    except socket.timeout:
-                        continue
-                    if not data:
-                        break
-                    buf += data
-                    *lines, buf = buf.split(b"\r\n")
-                    for ln in lines:
-                        s = ln.decode("utf-8", "replace")
-                        if s.startswith("PING"):
-                            sock.sendall(("PONG" + s[4:] + "\r\n").encode())
-                            continue
-                        m = _parse_privmsg(s)
-                        if m and m[1]:
-                            out.write(json.dumps({"t": time.time(), "user": m[0], "text": m[1]}, ensure_ascii=False) + "\n")
-            except (OSError, ssl.SSLError) as ex:
-                if use_tls and not isinstance(ex, socket.timeout):
-                    use_tls = False  # maybe TLS is blocked; try plain 6667 next
-            finally:
-                if sock:
-                    try: sock.close()
-                    except OSError: pass
+                if mode == "ws":
+                    _ws_session(channel, out, stop_event)
+                else:
+                    _raw_session(channel, out, stop_event, host, port, mode == "tls")
+                ok = True  # connected and later dropped: reconnect the same way
+            except Exception as ex:
+                print(f"twitch chat ({mode}) failed: {ex}", file=sys.stderr)
+            if not ok:
+                i += 1  # try the next transport
             stop_event.wait(3)
 
 
