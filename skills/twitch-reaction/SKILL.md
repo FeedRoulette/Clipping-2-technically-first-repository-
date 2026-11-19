@@ -20,11 +20,11 @@ Face on top, game below, a big title on the seam. The format of most viral GTA 6
 
 ```
 python "${CLAUDE_PLUGIN_ROOT}/scripts/cut.py" jobs/<id> --pick 1 --layout react --cam auto \
-  --title "Speed REALIZED why GTA 6 took ROCKSTAR 13 YEARS" --title-style box --captions bubble
+  --title "Speed REALIZED why GTA 6 took ROCKSTAR 13 YEARS" --title-style outline --captions word
 ```
 
 - `--cam auto` finds the streamer's webcam itself (face detection plus the webcam frame around it). It prints where it found the cam. If it finds no stable face it falls back to the blur layout and says so. Check the first frame once; if the crop is wrong, pass `--cam x:y:w:h` fractions.
-- `--title-style box`: white band with bold black text on the seam. `--title-style outline`: white text with a thick black outline across the top of the game, for short titles ("Fighting Cops in GTA 6").
+- `--title-style outline` (default, the house style): big white ALL-CAPS title with a thick black outline, centred on the seam, no bar behind it. Captions: `--captions word` (big, outlined, the spoken word turns yellow and pops). `--title-style box` (white band) only if the user asks for it.
 - `--captions bubble`: white speech bubble ("Oh my god!"). `word`: word-by-word captions. `none`: title only.
 - Write the title with `hook-writer` (reaction titles section).
 

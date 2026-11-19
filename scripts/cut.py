@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import load_json, run, save_json, tool
 
 W, H = 1080, 1920
+FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"  # bundled Anton (SIL OFL)
 
 
 def ts(t):
@@ -60,10 +61,10 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,Arial Black,92,&H00FFFFFF,&H0000E5FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,7,3,5,60,60,0,1
-Style: Hook,Arial Black,68,&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,18,0,8,70,70,170,1
+Style: Cap,Anton,150,&H00FFFFFF,&H0000E5FF,&H00000000,&H96000000,0,0,0,0,100,100,1,0,1,11,6,5,50,50,0,1
+Style: Hook,Anton,130,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,0,0,0,0,100,100,1,0,1,9,5,8,60,60,170,1
 Style: TitleBox,Arial Black,66,&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,1,0,0,5,40,40,0,1
-Style: TitleOut,Arial Black,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,9,2,8,50,50,0,1
+Style: TitleOut,Anton,150,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,0,0,0,0,100,100,1,0,1,12,7,5,40,40,0,1
 Style: Bubble,Arial,58,&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,16,0,5,60,60,0,1
 
 [Events]
@@ -90,7 +91,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             parts = []
             for j, x in enumerate(g):
                 t = esc(x["w"].upper())
-                parts.append("{\\c&H0000E5FF&}" + t + "{\\c&H00FFFFFF&}" if j == k else t)
+                parts.append("{\\c&H0000E5FF&\\fscx118\\fscy118\\t(0,90,\\fscx108\\fscy108)}" + t + "{\\c&H00FFFFFF&\\fscx100\\fscy100}" if j == k else t)
             pop = "{\\fscx112\\fscy112\\t(0,90,\\fscx100\\fscy100)}" if k == 0 else ""
             if caps == 'bubble':
                 if k == 0:
@@ -102,15 +103,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     if title:  # reaction title: (style, text, y, seconds)
         st, text, ty, secs = title
         end = (e0 - s0) if secs <= 0 else secs
-        lines = wrap(esc(text), 26 if st == 'box' else 24)
+        lines = wrap(esc(text if st == 'box' else text.upper()), 26 if st == 'box' else 16)
         body = '\\N'.join(lines)
         if st == 'box':
             ev.append(f"Dialogue: 2,{ts(0)},{ts(end)},TitleBox,,0,0,0,,{{\\pos({W // 2},{ty})}}{body}")
         else:
-            ev.append(f"Dialogue: 2,{ts(0)},{ts(end)},TitleOut,,0,0,0,,{{\\pos({W // 2},{ty})\\an8}}{body}")
+            ev.append(f"Dialogue: 2,{ts(0)},{ts(end)},TitleOut,,0,0,0,,{{\\pos({W // 2},{ty})\\an5\\fscx112\\fscy112\\t(0,120,\\fscx100\\fscy100)}}{body}")
         hook = ''
     if hook:
-        ev.append(f"Dialogue: 1,{ts(0)},{ts(hook_end)},Hook,,0,0,0,,{{\\fad(0,180)\\fscx92\\fscy92\\t(0,120,\\fscx100\\fscy100)}}{esc(hook)}")
+        ev.append(f"Dialogue: 1,{ts(0)},{ts(hook_end)},Hook,,0,0,0,,{{\\fad(0,180)\\fscx92\\fscy92\\t(0,120,\\fscx100\\fscy100)}}{esc(hook.upper())}")
     return hdr + "\n".join(ev) + "\n"
 
 
@@ -152,7 +153,8 @@ def video_filter(layout, cam, ass, band=None, cam_side='right', src=None, game_x
         v = (f"[0:v]split[a][b];[a]crop=iw*{w}:ih*{h}:iw*{x}:ih*{y},scale={W}:{int(H * 0.38)}:force_original_aspect_ratio=increase,"
              f"crop={W}:{int(H * 0.38)}[cam];[b]scale=-2:{H - int(H * 0.38)},crop={W}:{H - int(H * 0.38)}[game];[cam][game]vstack[v]")
     sub = str(ass).replace("\\", "/").replace(":", "\\:")
-    return v + f";[v]fps=30,subtitles='{sub}'[vo]"
+    fonts = str(FONTS).replace("\\", "/").replace(":", "\\:")
+    return v + f";[v]fps=30,subtitles='{sub}':fontsdir='{fonts}'[vo]"
 
 
 def game_offset(video, s0, e0, src, cam_box):
@@ -201,7 +203,7 @@ def main():
     ap.add_argument("job"); ap.add_argument("--pick", type=int, default=1)
     ap.add_argument("--layout", choices=["fill", "blur", "facecam", "react"], default="blur")
     ap.add_argument("--title", default="", help="reaction title, e.g. 'Speed REALIZED why GTA 6 took 13 YEARS'")
-    ap.add_argument("--title-style", choices=["box", "outline"], default="box")
+    ap.add_argument("--title-style", choices=["box", "outline"], default="outline")
     ap.add_argument("--title-secs", type=float, default=0, help="0 = whole clip")
     ap.add_argument("--captions", choices=["word", "bubble", "none"], default="word")
     ap.add_argument("--hook", default="")
@@ -254,13 +256,13 @@ def main():
     cap_y = CAP_Y[layout]
     title, band = None, None
     if a.title and layout == 'react':
-        n = len(wrap(a.title, 26 if a.title_style == 'box' else 24))
+        n = len(wrap(a.title, 26 if a.title_style == 'box' else 16))
         if a.title_style == 'box':
             bh = n * 78 + 44
             band = (TOP - bh // 2, bh, a.title_secs)
             title = ('box', a.title, TOP, a.title_secs)
         else:
-            title = ('outline', a.title, TOP + 40, a.title_secs)
+            title = ('outline', a.title, TOP, a.title_secs)
     ass = out / f"clip_{a.pick}.ass"
     caps = a.captions
     cap_words = words if caps != 'none' else []

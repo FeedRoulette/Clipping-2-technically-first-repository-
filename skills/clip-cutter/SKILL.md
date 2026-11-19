@@ -1,6 +1,6 @@
 ---
 name: clip-cutter
-description: Cut a picked moment into a finished 1080x1920 vertical clip with word-by-word captions, and a hook box. Use after moment-finder, or when the user says "cut it", "make the clip", "make it vertical".
+description: Cut a picked moment into a finished 1080x1920 vertical clip with big word-by-word captions and an outlined hook (no box). Use after moment-finder, or when the user says "cut it", "make the clip", "make it vertical".
 ---
 
 # Clip cutter
