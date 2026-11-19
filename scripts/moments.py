@@ -106,8 +106,9 @@ def z(a):
 
 
 def smooth(a, k):
-    k = max(1, int(k))
-    return np.convolve(a, np.ones(k) / k, mode="same")
+    a = np.asarray(a, dtype=float)
+    k = max(1, min(int(k), len(a)))  # mode="same" returns max(len(a), k) items: keep k <= len(a)
+    return np.convolve(a, np.ones(k) / k, mode="same") if len(a) else a
 
 
 def main():

@@ -13,25 +13,48 @@ Method: YuNet face detection on ~12 sampled frames, keep the face cluster that s
 frames (in-game faces move). Then grow a rectangle around that face using a median-of-frames edge map:
 the webcam border is a straight, static line, so its edge response survives the median while gameplay edges blur out.
 """
-import argparse, json, os, subprocess, sys, urllib.request
+import argparse, hashlib, json, os, subprocess, sys, urllib.request
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-MODEL_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+MODEL_URLS = (  # same file; the second is GitHub's LFS host, used when github.com downloads are blocked
+    "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+    "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+)
+MODEL_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"  # opencv_zoo LFS oid
 MODEL = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".cache")) / "gtavi-claudecode" / "models" / "face_detection_yunet_2023mar.onnx"
 N_FRAMES = 12
 MAX_W = 1280  # analysis width
 
 
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def model_path():
-    if not MODEL.exists() or MODEL.stat().st_size < 100_000:
-        MODEL.parent.mkdir(parents=True, exist_ok=True)
-        tmp = MODEL.with_suffix(".part")
-        urllib.request.urlretrieve(MODEL_URL, tmp)
-        tmp.replace(MODEL)
-    return str(MODEL)
+    if MODEL.exists() and _sha256(MODEL) == MODEL_SHA256:
+        return str(MODEL)
+    MODEL.parent.mkdir(parents=True, exist_ok=True)
+    tmp = MODEL.with_suffix(".part")
+    errors = []
+    for url in MODEL_URLS:
+        try:
+            urllib.request.urlretrieve(url, tmp)
+        except Exception as e:  # blocked host, offline mirror: try the next one
+            errors.append(f"{url}: {e}")
+            continue
+        if _sha256(tmp) == MODEL_SHA256:
+            tmp.replace(MODEL)
+            return str(MODEL)
+        errors.append(f"{url}: checksum mismatch")
+    tmp.unlink(missing_ok=True)
+    sys.exit("could not download the face model:\n  " + "\n  ".join(errors))
 
 
 def duration(video):
@@ -82,9 +105,14 @@ def iou(a, b):
 
 
 def stable_face(dets, n):
-    """Cluster detections by position; return (median face box, hits) of the best stable cluster."""
-    best = None
+    """Cluster detections by position; return (median face box, hits) of the best stable cluster.
+
+    Faces in on-screen content (YouTube thumbnails, posters, paused video) are also stable, so
+    among well-supported clusters prefer one that moves (a live person always sways a little;
+    a picture stays put to the sub-pixel), then more hits, then the bigger face.
+    """
     flat = [(i, d) for i, ds in enumerate(dets) for d in ds]
+    clusters = []
     for _, seed in flat:
         members = {}
         for i, d in flat:
@@ -93,10 +121,20 @@ def stable_face(dets, n):
             if (dx * dx + dy * dy) ** 0.5 < 1.3 * max(seed[2], d[2]) and 0.6 < d[2] / seed[2] < 1.67:
                 if i not in members or d[4] > members[i][4]:
                     members[i] = d
-        if best is None or len(members) > len(best):
-            best = members
-    if not best:
+        if members:
+            clusters.append(members)
+    if not clusters:
         return None, 0
+    top = max(len(c) for c in clusters)
+
+    def key(c):
+        arr = np.array(list(c.values()))
+        w = float(np.median(arr[:, 2]))
+        cx = arr[:, 0] + arr[:, 2] / 2; cy = arr[:, 1] + arr[:, 3] / 2
+        moving = len(arr) >= 3 and float(np.hypot(cx.std(), cy.std())) > 0.02 * w
+        return (moving, len(c), w * float(np.median(arr[:, 3])))
+
+    best = max((c for c in clusters if len(c) >= 0.75 * top), key=key)
     arr = np.array(list(best.values()))
     return np.median(arr[:, :4], axis=0), len(best)
 
