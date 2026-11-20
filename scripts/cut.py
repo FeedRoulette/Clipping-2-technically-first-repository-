@@ -227,6 +227,7 @@ def main():
     out = d / "edits"; out.mkdir(exist_ok=True)
     layout, cam, side = a.layout, a.cam, 'right'
     face_expr = None
+    game_box = None
     if layout in ('react', 'facecam') and cam == 'auto':
         from facecam import find_cam
         r = find_cam(c['source'], s0, e0)
@@ -250,6 +251,12 @@ def main():
                 print(f"facecam: no clean cam frame, tracking the face ({r.get('summary', '')})")
         if r.get('mode') in ('cam', 'face'):
             bx = list(r['box'])
+            if r['mode'] == 'face' and r.get('face'):
+                # no cam border: keep the game crop off the face itself (head and shoulders), not the whole
+                # padded face box, or the crop is shoved to the far edge and cuts off centred action
+                fx, fy, fw, fh = r['face']
+                gx0, gx1 = max(0.0, fx - fw * 0.6), min(1.0, fx + fw * 1.6)
+                game_box = [gx0, max(0.0, fy - fh * 0.6), gx1 - gx0, min(1.0, fh * 3.2)]
             if r['mode'] == 'face':  # no webcam frame: widen the face crop so it is not a blurry close-up
                 cx, cy = bx[0] + bx[2] / 2, bx[1] + bx[3] / 2
                 bw, bh = min(1.0, bx[2] * 2.6), min(1.0, bx[3] * 2.2)
@@ -285,7 +292,7 @@ def main():
         from common import ffprobe
         vs = [x for x in ffprobe(c['source'])['streams'] if x.get('codec_type') == 'video'][0]
         src = (int(vs['width']), int(vs['height']))
-        gx = game_offset(c['source'], s0, e0, src, [float(t) for t in cam.split(':')])
+        gx = game_offset(c['source'], s0, e0, src, game_box or [float(t) for t in cam.split(':')])
     v = video_filter(layout, cam, ass, band=band, cam_side=side, src=src, game_x=gx, face_expr=face_expr)
     mp4 = out / f"clip_{a.pick}.mp4"
     run([tool("ffmpeg"), "-y", "-v", "error", "-ss", f"{s0:.2f}", "-to", f"{e0:.2f}", "-i", c["source"],
