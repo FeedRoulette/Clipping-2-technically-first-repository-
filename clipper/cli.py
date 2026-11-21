@@ -59,7 +59,9 @@ def main():
             opts = dict(caption_model=args.caption_model or None, style=args.style,
                         music_vol=args.music_vol, progress_bar=not args.no_progress_bar)
             out_dir = Path(args.out) if args.out else ROOT / "output" / wd.name
-        clips = read_json(clips_path)["clips"]
+        spec = read_json(clips_path)
+        clips = spec["clips"]
+        opts["vocab"] = spec.get("vocab")
         if getattr(args, "only", None):
             keep = set(args.only.split(","))
             clips = [c for c in clips if str(c["id"]) in keep]

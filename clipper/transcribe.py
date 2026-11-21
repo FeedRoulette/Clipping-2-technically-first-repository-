@@ -91,10 +91,10 @@ def write_readable(wd, segments):
     (Path(wd) / "transcript.txt").write_text("\n".join(lines))
 
 
-def caption_words(src, start, end, model, language=None):
+def caption_words(src, start, end, model, language=None, vocab=None):
     """High-accuracy re-transcription of just one clip for captions (times relative to `start`)."""
     tmp = Path(src).parent / f"_cap_{start:.0f}.wav"
     extract_wav(src, tmp, start, end)
-    words, _, _ = whisper_words(tmp, model, language)
+    words, _, _ = whisper_words(tmp, model, language, prompt=vocab)
     tmp.unlink(missing_ok=True)
     return words

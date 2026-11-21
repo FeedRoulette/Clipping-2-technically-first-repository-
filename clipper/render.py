@@ -236,7 +236,7 @@ def mix_audio(voice_src, total, mood, out, broll_times, music_vol, seed, wd):
 
 # ---------------------------------------------------------------- main
 def render_clip(wd, clip, out_dir, caption_model="large-v3-turbo", style="bold", music_vol=0.10,
-                progress_bar=True, fps_cap=30):
+                progress_bar=True, fps_cap=30, vocab=None):
     wd = Path(wd)
     src = wd / "source.mp4"
     tr = read_json(wd / "transcript.json")
@@ -248,7 +248,7 @@ def render_clip(wd, clip, out_dir, caption_model="large-v3-turbo", style="bold",
     log(f"clip {cid}: {start:.1f}-{end:.1f} ({dur:.1f}s) '{clip.get('title', '')}'")
 
     if caption_model:
-        words = caption_words(src, start, end, caption_model, tr.get("language"))
+        words = caption_words(src, start, end, caption_model, tr.get("language"), vocab)
     else:
         words = [dict(w, s=w["s"] - start, e=w["e"] - start) for w in tr["words"]
                  if w["s"] >= start - 0.05 and w["e"] <= end + 0.05]

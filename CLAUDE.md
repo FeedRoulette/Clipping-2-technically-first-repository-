@@ -67,7 +67,8 @@ Good clips are **self-contained stories with tension that pays off**. For each c
   "why": "one line on why this clip works", "score": 90
 }]}
 ```
-`start`/`end` are seconds in the source; they snap to word boundaries automatically.
+Add a top-level `"vocab": "Name One, Name Two, Team, Jargon"` string so the caption model spells names
+right (the draft transcript often mangles them). `start`/`end` are seconds in the source; they snap to word boundaries automatically.
 
 ## What the renderer does automatically
 

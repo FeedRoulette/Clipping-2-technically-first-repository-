@@ -73,7 +73,7 @@ def build_ass(words, out_path, hook=None, hook_seconds=4.0, total=None, style="b
     """words: [{w,s,e}] in OUTPUT timeline seconds. keywords: [(t, text)] big pop-up words (no-broll mode)."""
     font, size, prim, outc, outw, shad = STYLES.get(style, STYLES["bold"])
     emphasis = {e.lower() for e in emphasis}
-    hook_size = 92 if hook and len(hook) < 34 else 80
+    hook_size = 96 if hook and len(hook) < 34 else 86
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
