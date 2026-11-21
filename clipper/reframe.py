@@ -36,7 +36,7 @@ def _frames(path, fps, width):
 def analyze(path):
     info = probe(path)
     sw, sh = info["width"], info["height"]
-    aw = 640
+    aw = 960
     ah = int(round(sh * aw / sw / 2) * 2)
     det = cv2.FaceDetectorYN.create(str(MODEL), "", (aw, ah), 0.7, 0.3, 50)
     samples = []
@@ -122,6 +122,11 @@ def plan(analysis, out_aspect=9 / 16):
                 keys.append({"t": sc[0]["t"], "mode": "split", "x1": people[0], "x2": people[-1],
                              "y": float(np.median(ys)), "fh": float(np.median(sizes)), "sid": sid})
                 continue
+        if len(people) >= 2 and people[-1] - people[0] < crop_w_norm * 0.75:
+            # everyone fits in one vertical frame (wide shot): frame the group, don't cut anyone out
+            keys.append({"t": sc[0]["t"], "mode": "track", "x": (people[0] + people[-1]) / 2,
+                         "who": -1, "sid": sid})
+            continue
         # track the active speaker
         def nearest(x):
             return int(np.argmin([abs(x - p) for p in people]))

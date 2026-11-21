@@ -1,6 +1,8 @@
 """B-roll finder. Sources, in order (all free):
   1. assets/broll/  — your own clips/images; filenames are matched against the query words
   2. Pexels API     — free key from https://www.pexels.com/api/ (no card). Put PEXELS_API_KEY=... in .env
+  3. Wikimedia Commons — free, no key: openly licensed photos (CC0/CC BY/CC BY-SA), animated with Ken Burns.
+     Credits are saved next to the file and copied into the clip's .json for the post description.
 If nothing is found the renderer falls back to punch-in zooms + big keyword pop-ups."""
 import json
 import os
@@ -79,5 +81,68 @@ def pexels(query, min_dur=2.0):
     return None
 
 
+UA = "ClipperBot/1.0 (personal video editing tool)"
+OK_LICENSES = ("cc0", "public domain", "cc by", "cc-by", "pdm")
+
+
+def _get(url, timeout=30, tries=4):
+    """GET with polite backoff on 429/503 (honours Retry-After)."""
+    import time
+    import urllib.error
+    for i in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            return urllib.request.urlopen(req, timeout=timeout).read()
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 503) or i == tries - 1:
+                raise
+            wait = min(60, int(e.headers.get("Retry-After") or 0) or 5 * 2 ** i)
+            log(f"  wikimedia busy, retrying in {wait}s")
+            time.sleep(wait)
+
+
+def wikimedia(query):
+    cache = WORK / "_broll_cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    slug = "wm_" + re.sub(r"[^a-z0-9]+", "_", query.lower())[:50]
+    hit = cache / f"{slug}.jpg"
+    if hit.exists():
+        return hit
+    url = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
+        "action": "query", "generator": "search", "gsrsearch": f"filetype:bitmap {query}",
+        "gsrnamespace": 6, "gsrlimit": 12, "prop": "imageinfo",
+        "iiprop": "url|size|extmetadata|mime", "iiurlwidth": 1600, "format": "json"})
+    try:
+        pages = json.loads(_get(url)).get("query", {}).get("pages", {})
+        best = None
+        for pg in sorted(pages.values(), key=lambda p: p.get("index", 99)):
+            ii = (pg.get("imageinfo") or [{}])[0]
+            meta = ii.get("extmetadata", {})
+            lic = meta.get("LicenseShortName", {}).get("value", "")
+            if ii.get("mime") not in ("image/jpeg", "image/png") or not lic.lower().startswith(OK_LICENSES):
+                continue
+            if min(ii.get("width", 0), ii.get("height", 0)) < 900:
+                continue
+            best = (ii, lic, meta)
+            break
+        if not best:
+            return None
+        ii, lic, meta = best
+        hit.write_bytes(_get(ii.get("thumburl") or ii["url"], timeout=60))
+        artist = re.sub(r"<[^>]+>", "", meta.get("Artist", {}).get("value", "unknown")).strip()
+        credit = f"{ii.get('descriptionurl', '')} by {artist} ({lic})"
+        hit.with_suffix(".credit.txt").write_text(credit)
+        log(f"b-roll '{query}' <- Wikimedia Commons: {credit}")
+        return hit
+    except Exception as e:
+        log(f"wikimedia lookup failed for '{query}': {e}")
+        return None
+
+
+def credit_for(path):
+    c = Path(path).with_suffix(".credit.txt")
+    return c.read_text() if c.exists() else None
+
+
 def find(query):
-    return local(query) or pexels(query)
+    return local(query) or pexels(query) or wikimedia(query)

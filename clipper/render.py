@@ -350,6 +350,9 @@ def render_clip(wd, clip, out_dir, caption_model="large-v3-turbo", style="bold",
         raise RuntimeError("encoder failed")
     meta = {k: clip.get(k) for k in ("title", "hook", "caption", "hashtags", "why", "score")}
     meta.update(file=str(out), start=start, end=end, duration=round(total, 2))
+    credits = [c for c in (broll_mod.credit_for(m) for _, _, m in bwins) if c]
+    if credits:
+        meta["broll_credits"] = credits
     write_json(out.with_suffix(".json"), meta)
     for f in tmp.iterdir():
         f.unlink()
