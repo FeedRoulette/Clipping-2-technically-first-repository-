@@ -1,0 +1,85 @@
+{
+  "name": "loan",
+  "src": "/path/to/episode.mp4",
+  "words": "work/g_brad.words.json",
+  "segments": [
+    [
+      1902.65,
+      1925.65
+    ]
+  ],
+  "max_len": 35,
+  "hook_lines": [
+    [
+      "CEO NEEDED ANOTHER $60M",
+      "white"
+    ],
+    [
+      "OVERNIGHT",
+      "red"
+    ]
+  ],
+  "hook_emoji": "scream",
+  "keywords": [
+    "DOUBLES",
+    "CAPITAL",
+    "60",
+    "MILLION",
+    "BRAD",
+    "GARLINGHOUSE"
+  ],
+  "emoji_pops": [
+    {
+      "at": 1905.2,
+      "emoji": "scream"
+    },
+    {
+      "at": 1925.1,
+      "emoji": "party"
+    }
+  ],
+  "punch": [
+    {
+      "at": 1914.8,
+      "text": "$60M",
+      "color": [
+        60,
+        255,
+        90
+      ]
+    }
+  ],
+  "broll": [
+    {
+      "from": 1909.0,
+      "to": 1909.9,
+      "file": "stock/14114.mp4",
+      "offset": 1.0,
+      "style": "full"
+    },
+    {
+      "from": 1914.6,
+      "to": 1915.9,
+      "file": "stock/47005.mp4",
+      "offset": 1.0,
+      "style": "full"
+    },
+    {
+      "from": 1922.9,
+      "to": 1923.8,
+      "file": "stock/38731.mp4",
+      "offset": 1.0,
+      "style": "card"
+    }
+  ],
+  "music": "music/122.mp3",
+  "music_db": -21,
+  "fixes": [
+    [
+      1925.94,
+      ""
+    ]
+  ],
+  "work_dir": "work",
+  "out": "out/1_ceo_needed_another_60m_overnight.mp4"
+}

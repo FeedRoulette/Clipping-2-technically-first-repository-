@@ -1,0 +1,7 @@
+assets/music/
+assets/sfx/
+assets/stock/
+work/
+out/
+__pycache__/
+*.energy.npy
