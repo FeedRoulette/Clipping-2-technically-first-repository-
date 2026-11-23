@@ -255,7 +255,11 @@ def main(spec_path):
     starts = [c[0]["s"] for c in chunks]
     keywords = {k.upper() for k in spec.get("keywords", [])}
 
-    hook = render_hook([tuple(x) for x in spec["hook_lines"]], spec.get("hook_emoji"))
+    hl = spec["hook_lines"]
+    if hl and isinstance(hl[0], list) and len(hl) == 1 and len(hl[0]) == 2 and hl[0][1] not in ("white", "yellow", "red"):
+        hl = [[hl[0][0], "white"], [hl[0][1], "yellow"]]          # tolerate [["line 1", "line 2"]]
+    hl = [[x, "white" if i == 0 else "yellow"] if isinstance(x, str) else x for i, x in enumerate(hl)]
+    hook = render_hook([tuple(x) for x in hl], spec.get("hook_emoji"))
     hook_end = spec.get("hook_seconds", 3.6)
     pops = [(mp.out(p["at"]), emoji_img(p["emoji"], 230)) for p in spec.get("emoji_pops", [])]
     punches = [(0.0, None)] + [(mp.out(p["at"]), stamp(p["text"], tuple(p.get("color", YEL))) if p.get("text") else None)
