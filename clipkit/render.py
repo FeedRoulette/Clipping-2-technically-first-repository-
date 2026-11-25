@@ -222,7 +222,7 @@ def stamp(text, color):
 def main(spec_path):
     spec = json.load(open(spec_path))
 
-    def res(p):                                          # "music/587.mp3" -> assets/music/587.mp3
+    def res(p):
         q = Path(p)
         return str(q if q.is_absolute() or q.exists() else ASSETS / q)
     spec["music"] = res(spec["music"])
@@ -234,6 +234,23 @@ def main(spec_path):
     _cc.clear()
     if spec.get("src"):
         M.SRC = spec["src"]
+    if spec.get("sr"):                                   # AI super-resolution for low-res (720p) sources
+        _orig_warp = getattr(M, "_orig_warp", M.warp)
+        M._orig_warp = _orig_warp
+        _sr = cv2.dnn_superres.DnnSuperResImpl_create()
+        _sr.readModel(str(ASSETS / "sr" / "FSRCNN_x3.pb")); _sr.setModel("fsrcnn", 3)
+
+        def warp_sr(fr, cx, cy, cw, ch, w, h):
+            Hh, Ww = fr.shape[:2]
+            cw, ch = min(cw, Ww), min(ch, Hh)
+            if w / cw < 1.6:                              # little upscaling needed -> plain path
+                return _orig_warp(fr, cx, cy, cw, ch, w, h)
+            x0 = int(max(0, np.clip(cx - cw / 2, 0, Ww - cw) - 2)); y0 = int(max(0, np.clip(cy - ch / 2, 0, Hh - ch) - 2))
+            x1 = int(min(Ww, x0 + cw + 5)); y1 = int(min(Hh, y0 + ch + 5))
+            up = _sr.upsample(np.ascontiguousarray(fr[y0:y1, x0:x1]))
+            b = cv2.GaussianBlur(up, (0, 0), 1.5); up = cv2.addWeighted(up, 1.5, b, -0.5, 0)
+            return _orig_warp(up, (cx - x0) * 3, (cy - y0) * 3, cw * 3, ch * 3, w, h)
+        M.warp = warp_sr
     name = spec["name"]
     wd = Path(spec.get("work_dir", Path(spec_path).parent)) / f"build_{name}"
     wd.mkdir(exist_ok=True)
@@ -243,7 +260,11 @@ def main(spec_path):
             words[-1] = dict(words[-1], w=words[-1]["w"] + w["w"], e=w["e"])
         else:
             words.append(w)
-    edl = M.build_edl(words, spec["segments"])
+    if spec.get("edit") == "v2":
+        import edl2
+        edl, kept_v2 = edl2.build(words, spec["segments"], M._energy(), FPS, spec.get("drop_at", []))
+    else:
+        edl, kept_v2 = M.build_edl(words, spec["segments"]), None
     mp = M.Map(edl)
     print(name, "pieces", len(edl), "duration", round(mp.total, 1), flush=True)
     if mp.total > spec.get("max_len", 31):
@@ -257,7 +278,8 @@ def main(spec_path):
 
     ow = []
     for w in words:
-        if any(s <= (w["s"] + w["e"]) / 2 < e for s, e in edl):      # caption exactly what is audible
+        if (kept_v2 is not None and any(w is k for k in kept_v2)) or \
+           (kept_v2 is None and any(s <= (w["s"] + w["e"]) / 2 < e for s, e in edl)):
             s = mp.out(w["s"])
             ow.append(dict(w, s=s, e=max(s + 0.08, mp.out(w["e"]))))
     for t, txt in spec.get("fixes", []):
@@ -461,7 +483,15 @@ def main(spec_path):
     dec.wait()
     enc.stdin.close()
     enc.wait()
-    print("done", spec["out"], round(i / FPS, 1), "s", flush=True)
+    sp = float(spec.get("speed", 1.0))
+    if abs(sp - 1.0) > 0.001:                       # natural-pitch speed-up of the finished clip
+        tmp_out = str(spec["out"]) + ".speed.mp4"
+        M.run(["ffmpeg", "-y", "-v", "error", "-i", spec["out"], "-filter_complex",
+               f"[0:v]setpts=PTS/{sp},fps={FPS}[v];[0:a]atempo={sp}[a]", "-map", "[v]", "-map", "[a]",
+               "-c:v", "libx264", "-preset", "slow", "-crf", "14", "-tune", "film", "-pix_fmt", "yuv420p",
+               "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", tmp_out])
+        Path(tmp_out).replace(spec["out"])
+    print("done", spec["out"], round(i / FPS / sp, 1), "s", flush=True)
 
 
 if __name__ == "__main__":

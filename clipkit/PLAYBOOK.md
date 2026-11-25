@@ -81,6 +81,17 @@ Look at the grid: hook readable at top and not covering the face, captions big a
 right words and not colliding with the hook, nothing odd. Fix and re-render before sending. You cannot hear audio —
 say so and ask the user to listen.
 
+## Editing v2 (use this for every clip)
+Add to the spec: `"edit": "v2"`, `"speed": 1.08`, optional `"drop_at": [source times of words to remove]`,
+and `"sr": true` for 720p or lower sources (AI upscaling, fixes blur when cropping to vertical).
+v2 keeps exactly the chosen words, removes um/uh, "you know", "I mean", stutters and restarts
+("you want me to, you want me to"), closes every pause (<0.15 s left) and only cuts inside real audio gaps.
+Check before rendering:  `python3 check2.py spec.json`  (text + length)  and  `python3 cutdiag.py spec.json`
+(every cut; "RISK" lines = glued words, verify the text reads right).
+
+## Retention targets (user's YouTube Studio): >= 80% average viewed, 70-80% stayed-to-watch
+- 18-25 s final length; zero dead air; 1.08x speed; end on the peak line; ideally the last line loops into the first.
+
 ## Hard-won lessons (don't repeat these mistakes)
 - Never send a test render made from a DIFFERENT podcast — test on the episode you're clipping.
 - If nothing meets the bar, say "none left" and send nothing. A weak clip is worse than no clip.
