@@ -26,3 +26,11 @@
 ## B-roll
 - Plenty: mix full-screen cutaways and pop-in cards, each on the exact word it illustrates.
 - Never overlapping the hook.
+
+## Brand theme (per podcast)
+- Match the podcast's brand colours for hook + captions (e.g. Higgsfield/20VC: lime #D1FE17, black, white).
+- If the user supplies a logo, it must be on every frame for the whole clip: noticeable (~620 px wide),
+  never covering a face, the captions or the hook.
+
+## Hard rule
+- Quality over quantity: 0 clips if nothing is good, 50 if 50 are good. Never pad a batch.

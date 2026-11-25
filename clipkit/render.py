@@ -22,6 +22,7 @@ HOOK_TOP_Y = 255          # just below TikTok/Shorts top bar
 HOOK_DROP = 430
 PALETTE = [(34, 197, 94), (139, 92, 246), (249, 115, 22), (236, 72, 153), (14, 165, 233)]
 YEL = (255, 230, 0)
+THEME = {"accent": None}            # set per spec: {"accent": [r,g,b]} -> brand colour theme
 _f = {}
 
 
@@ -108,8 +109,13 @@ def render_hook(lines, emoji=None, max_size=112):
         h = cap_h + 2 * pad_y
         im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        bg, fg = {"white": ((255, 255, 255, 255), (0, 0, 0)), "yellow": ((255, 230, 0, 255), (0, 0, 0)),
-                  "red": ((235, 40, 40, 255), (255, 255, 255))}[style]
+        A = THEME["accent"]
+        styles = {"white": ((255, 255, 255, 255), (0, 0, 0)), "yellow": ((255, 230, 0, 255), (0, 0, 0)),
+                  "red": ((235, 40, 40, 255), (255, 255, 255))}
+        if A:
+            styles.update({"accent": (tuple(A) + (255,), (0, 0, 0)), "black": ((12, 12, 12, 255), tuple(A)),
+                           "yellow": (tuple(A) + (255,), (0, 0, 0)), "red": ((12, 12, 12, 255), tuple(A))})
+        bg, fg = styles[style]
         d.rounded_rectangle([0, 0, w - 1, h - 1], radius=int(size * 0.2), fill=bg)
         d.text((pad_x, pad_y - top), t, font=f, fill=fg)
         if e:
@@ -156,7 +162,8 @@ def render_caption(ci, toks, active, keywords, bounce):
     size = int(base * min(1.0, 980 / total))
     f = font(CAP_FONT, size)
     fa = font(CAP_FONT, max(10, int(size * bounce)))
-    col_box = PALETTE[ci % len(PALETTE)]
+    col_box = tuple(THEME["accent"]) if THEME["accent"] else PALETTE[ci % len(PALETTE)]
+    kw_col = tuple(THEME["accent"]) if THEME["accent"] else YEL
     space = f.getlength(" ")
     widths = [(fa if j == active else f).getlength(t) for j, t in enumerate(toks)]
     padx = int(size * 0.18)
@@ -173,11 +180,14 @@ def render_caption(ci, toks, active, keywords, bounce):
             bb = d.textbbox((cx, H / 2), t, font=ff, anchor="mm")
             d.rounded_rectangle([bb[0] - padx, bb[1] - int(size * 0.16), bb[2] + padx, bb[3] + int(size * 0.16)],
                                 radius=int(size * 0.22), fill=col_box + (255,))
-            d.text((cx, H / 2), t, font=ff, anchor="mm", fill=(255, 255, 255), stroke_width=int(sw * 0.6),
-                   stroke_fill=(0, 0, 0))
+            if THEME["accent"]:
+                d.text((cx, H / 2), t, font=ff, anchor="mm", fill=(0, 0, 0))
+            else:
+                d.text((cx, H / 2), t, font=ff, anchor="mm", fill=(255, 255, 255), stroke_width=int(sw * 0.6),
+                       stroke_fill=(0, 0, 0))
         else:
             plain = re.sub(r"[^A-Z0-9$]", "", t)
-            d.text((cx, H / 2), t, font=ff, anchor="mm", fill=YEL if plain in keywords else (255, 255, 255),
+            d.text((cx, H / 2), t, font=ff, anchor="mm", fill=kw_col if plain in keywords else (255, 255, 255),
                    stroke_width=sw, stroke_fill=(0, 0, 0))
         x += w + space + 2 * padx
     out = shadowed(im, blur=8, off=(6, 10), strength=0.7)
@@ -218,6 +228,10 @@ def main(spec_path):
     spec["music"] = res(spec["music"])
     for b in spec.get("broll", []):
         b["file"] = res(b["file"])
+    if spec.get("logo"):
+        spec["logo"]["file"] = res(spec["logo"]["file"])
+    THEME["accent"] = spec.get("theme", {}).get("accent")
+    _cc.clear()
     if spec.get("src"):
         M.SRC = spec["src"]
     name = spec["name"]
@@ -237,7 +251,7 @@ def main(spec_path):
     cutp = wd / "cut.mp4"
     M.cut(edl, cutp)
     plan = []
-    for a_, b_ in sorted(spec["segments"]):                     # only scan the pieces we use
+    for a_, b_, *_ in sorted(spec["segments"]):                     # only scan the pieces we use
         plan += M.analyze(a_ - 0.3, b_ + 0.4)
     plan.sort(key=lambda p: p["t0"])
 
@@ -255,6 +269,13 @@ def main(spec_path):
     starts = [c[0]["s"] for c in chunks]
     keywords = {k.upper() for k in spec.get("keywords", [])}
 
+    logo = None
+    if spec.get("logo"):
+        L = spec["logo"]
+        li = Image.open(L["file"]).convert("RGBA")
+        lw = int(L.get("width", 560))
+        li = li.resize((lw, int(li.height * lw / li.width)), Image.LANCZOS)
+        logo = (shadowed(li, blur=10, off=(4, 6), strength=0.85), L.get("cy", 1500))
     hl = spec["hook_lines"]
     if hl and isinstance(hl[0], list) and len(hl) == 1 and len(hl[0]) == 2 and hl[0][1] not in ("white", "yellow", "red"):
         hl = [[hl[0][0], "white"], [hl[0][1], "yellow"]]          # tolerate [["line 1", "line 2"]]
@@ -262,7 +283,7 @@ def main(spec_path):
     hook = render_hook([tuple(x) for x in hl], spec.get("hook_emoji"))
     hook_end = spec.get("hook_seconds", 3.6)
     pops = [(mp.out(p["at"]), emoji_img(p["emoji"], 230)) for p in spec.get("emoji_pops", [])]
-    punches = [(0.0, None)] + [(mp.out(p["at"]), stamp(p["text"], tuple(p.get("color", YEL))) if p.get("text") else None)
+    punches = [(0.0, None)] + [(mp.out(p["at"]), stamp(p["text"], tuple(p.get("color", THEME["accent"] or YEL))) if p.get("text") else None)
                for p in spec.get("punch", [])]
 
     brolls = []
@@ -402,7 +423,7 @@ def main(spec_path):
                 rot = (-3 if ci % 2 else 3) * (1 - min(1, (t - chk[0]["s"]) / 0.2)) + (-1.5 if ci % 2 else 1.5)
                 cy = CAP_Y_SPLIT if shot["mode"] == "split" else CAP_Y
                 if shot["mode"] != "split":
-                    cy += int(HOOK_DROP * 0.75 * (1 - hk_k))
+                    cy += int(HOOK_DROP * (0.6 if logo else 0.75) * (1 - hk_k))
                 paste(img, scale_img(im, max(0.3, s), rot), OW / 2, cy)
 
         # emoji stickers
@@ -418,7 +439,7 @@ def main(spec_path):
             if st is not None and pt <= t < pt + 1.1:
                 s = 1.6 - 0.6 * ease_back((t - pt) / 0.18, 1.2)
                 a = 1 - max(0, (t - pt - 0.9) / 0.2)
-                paste(img, fade(scale_img(st, s, 6), a), OW / 2, 1290)
+                paste(img, fade(scale_img(st, s, 6), a), OW / 2, 1240 if logo else 1290)
         # hook: drop in with bounce, pop out
         if t < hook_end + 0.2:
             if t < hook_end:
@@ -430,6 +451,8 @@ def main(spec_path):
             if hk is not None:
                 cy_h = HOOK_CY if HOOK_CY else HOOK_TOP_Y + hook.height / 2
                 paste(img, hk, OW / 2, cy_h + yoff)
+        if logo:                                      # brand logo: every frame, always on top
+            paste(img, logo[0], OW / 2, logo[1])
         enc.stdin.write(img.tobytes())
         i += 1
     dec.wait()

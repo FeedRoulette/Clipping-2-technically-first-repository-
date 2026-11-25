@@ -32,8 +32,11 @@ def norm(w):
 def build_edl(words, segments, max_gap=0.5, keep_gap=None, pre_pad=0.12, post_pad=0.25):
     """Pieces = chosen segments, split only at real pauses (> max_gap). Generous padding so no word is clipped:
     0.12 s before and 0.25 s after every piece, but never reaching into a word that is not kept."""
-    pieces = []
-    for a, b in segments:
+    pieces, tight = [], []
+    segs3 = [tuple(x) + (None,) * (3 - len(x)) for x in segments]
+    segments = [(x[0], x[1]) for x in segs3]
+    for a, b, flag in segs3:
+        n0 = len(pieces)
         ws = [w for w in words if a - 0.08 <= w["s"] < b]      # any word that STARTS inside is kept whole
         cur = None
         for w in ws:
@@ -46,6 +49,7 @@ def build_edl(words, segments, max_gap=0.5, keep_gap=None, pre_pad=0.12, post_pa
                 cur = [s, e]
         if cur:
             pieces.append(cur)
+        tight += [flag == "tight"] * (len(pieces) - n0)
     kept = {(w["s"], w["e"]) for a, b in segments for w in words if a - 0.08 <= w["s"] < b}
     all_w = sorted(words, key=lambda w: w["s"])
     out = []
@@ -68,6 +72,11 @@ def build_edl(words, segments, max_gap=0.5, keep_gap=None, pre_pad=0.12, post_pa
         for i, (p, (s, e)) in enumerate(zip(out, pieces)):
             prev_e = max([w["e"] for w in all_w if w["s"] < s - 0.001] or [s - 0.4])
             nxt_s = min([w["s"] for w in all_w if w["s"] > e - 0.001 and w["s"] >= s + 0.001] or [e + 0.6])
+            if tight[i]:
+                # "tight": speech runs straight on - cut in the gap between the two words, never slide
+                p[0] = quiet(max(prev_e, s - 0.3), s - 0.01) if prev_e < s else s - 0.02
+                p[1] = quiet(e, max(e + 0.03, min(nxt_s - 0.01, e + 0.35))) + 0.01
+                continue
             p[0] = quiet(max(s - 0.35, min(prev_e, s) - 0.05), s + 0.04)
             hi = min(e + (0.7 if i == len(pieces) - 1 else 0.4), max(nxt_s + 0.06, e + 0.12))
             p[1] = quiet(e - 0.06, hi) + 0.02

@@ -53,6 +53,11 @@ start time.
 | `music` | `music/ID.mp3` (see `fetch_assets.py` for moods); `music_db` -21 |
 | `fixes` | `[[source_time, "replacement"]]` caption-only corrections ("" hides a word), e.g. `[[3195.0,"6'5\""]]` |
 | `out` | output mp4 path |
+| `theme` | optional brand colours, e.g. `{"accent": [209,254,23]}` → hook lines styled `"accent"`/`"black"`, lime caption boxes |
+| `logo` | optional `{"file":"brand/x.png","width":620,"cy":1500}` → logo on EVERY frame, lower-middle, never over face/captions/hook |
+
+A segment can be `[start, end, "tight"]`: use it when the speaker runs straight on with no pause and the
+normal snap-to-silence drags in extra words; the cut then lands in the gap between the two words.
 
 Need other B-roll? Search `https://mixkit.co/free-stock-video/<tag>/` (send a browser User-Agent), parse
 `/free-stock-video/<slug>-<id>/` links, then `python3 fetch_assets.py <id> ...`. Preview a frame before using it.
@@ -77,6 +82,9 @@ right words and not colliding with the hook, nothing odd. Fix and re-render befo
 say so and ask the user to listen.
 
 ## Hard-won lessons (don't repeat these mistakes)
+- Never send a test render made from a DIFFERENT podcast — test on the episode you're clipping.
+- If nothing meets the bar, say "none left" and send nothing. A weak clip is worse than no clip.
+- Check who is actually speaking before writing a hook that quotes someone.
 - Never cut at word-timestamp edges — the renderer snaps cuts to real audio silence; keep it that way.
 - Don't remove "um"/"uh" mid-sentence (choppy). Don't over-trim pauses.
 - Zooming in on a 1080p source blurs it; keep zoom minimal. AI upscalers barely help on YouTube-compressed sources.
