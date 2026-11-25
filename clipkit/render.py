@@ -276,6 +276,7 @@ def main(spec_path):
         lw = int(L.get("width", 560))
         li = li.resize((lw, int(li.height * lw / li.width)), Image.LANCZOS)
         logo = (shadowed(li, blur=10, off=(4, 6), strength=0.85), L.get("cy", 1500))
+        M.SPLIT_BOTTOM_OFFSET = 0.26          # keep the bottom speaker's face above the logo
     hl = spec["hook_lines"]
     if hl and isinstance(hl[0], list) and len(hl) == 1 and len(hl[0]) == 2 and hl[0][1] not in ("white", "yellow", "red"):
         hl = [[hl[0][0], "white"], [hl[0][1], "yellow"]]          # tolerate [["line 1", "line 2"]]
@@ -289,6 +290,8 @@ def main(spec_path):
     brolls = []
     for b in spec.get("broll", []):
         t0, t1 = mp.out(b["from"]), mp.out(b["to"])
+        if t0 < spec.get("hook_seconds", 3.6) + 0.4:        # never cover the hook with b-roll
+            continue
         cap = cv2.VideoCapture(b["file"])
         cap.set(cv2.CAP_PROP_POS_MSEC, b.get("offset", 1.0) * 1000)
         sfps = cap.get(cv2.CAP_PROP_FPS) or 30

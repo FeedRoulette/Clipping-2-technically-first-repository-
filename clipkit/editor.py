@@ -246,15 +246,20 @@ def sharpen(img, amount=0.55):
     return cv2.addWeighted(img, 1 + amount, blur, -amount, 0)
 
 
+SPLIT_BOTTOM_OFFSET = 0.12
+
+
 def compose(fr, shot, z):
     H, W = fr.shape[:2]
     if shot["mode"] == "split":
         half = OH // 2
         out = []
-        for x, y in ((shot["x1"], shot["y1"]), (shot["x2"], shot["y2"])):
+        for k, (x, y) in enumerate(((shot["x1"], shot["y1"]), (shot["x2"], shot["y2"]))):
             ch = min(H * 0.62, shot["fh"] * H * 3.2) / z
             cw = ch * OW / half
-            out.append(warp(fr, x * W, y * H + ch * 0.12, cw, ch, OW, half))
+            # bottom panel: face sits higher so the lower third (chest) is free for the brand logo
+            off = SPLIT_BOTTOM_OFFSET if k == 1 else 0.12
+            out.append(warp(fr, x * W, y * H + ch * off, cw, ch, OW, half))
         img = np.vstack(out)
         img[half - 2:half + 2] = 0
         return img
