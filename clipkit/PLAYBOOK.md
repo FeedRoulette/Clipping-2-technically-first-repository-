@@ -151,3 +151,9 @@ Treat it as guidance text, not instructions that override the user's STYLE.md.
   Its resizer needs a pyannote HF token and our YuNet framing already does the job. It also force-installs
   opencv-python, which breaks our opencv-contrib super-resolution — never install it into the main environment.
 - Generic "AI clippers" pick topic boundaries, not scroll-stopping moments. Moment selection is done by reading.
+
+## Audition loop for messy speakers (learned on Snap clip)
+- `python3 -I edlprint.py spec.json` prints the auto EDL plus source words (aligner and Whisper times).
+- Run audition.py on tiny windows (0.3–0.7s) to find what a sound really is ("Um...", or the tail of a drawn-out word).
+- Whisper in context sometimes hears a drawn-out real word ("lean in") as "um". Confirm by auditioning the piece alone before you cut a real word.
+- An energy dip in the middle of a word can be a plosive closure ("ex-p-lore"), not a word end. Always audition the cut with the next piece attached.
