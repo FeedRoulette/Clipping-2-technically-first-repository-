@@ -270,6 +270,8 @@ def main(spec_path):
         edl, kept_v2 = edl2.build(words, spec["segments"], M._energy(), FPS, spec.get("drop_at", []))
     else:
         edl, kept_v2 = M.build_edl(words, spec["segments"]), None
+    if spec.get("edl"):                                 # hand-checked cut list (auditioned with audition.py)
+        edl = [[a, a + max(1, round((b - a) * FPS)) / FPS] for a, b in spec["edl"]]
     mp = M.Map(edl)
     print(name, "pieces", len(edl), "duration", round(mp.total, 1), flush=True)
     if mp.total > spec.get("max_len", 31):

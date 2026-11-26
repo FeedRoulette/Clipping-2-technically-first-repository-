@@ -96,6 +96,14 @@ say so and ask the user to listen.
    re-transcribes the output and diffs it against the intended text (catches clipped words).
    Look at a 30 fps frame strip around every camera change for flashes.
 
+## MANDATORY dead-air / filler gate (before sending ANY clip)
+1. `python3 -I audition.py SRC '[[a,b],...]'` — cuts only the audio of an edit and re-transcribes it in seconds.
+   Use it to test tricky cuts; put the final hand-checked list in the spec as `"edl"`.
+2. After rendering: `python3 -I verify.py spec.json` must show `DEAD AIR: none` and `fillers heard: none`
+   (it re-transcribes the finished clip; a dragged "uhhh" or 1-2 s pause = viewers swipe). Fix and re-render if not.
+3. The source transcript can MISS fillers ("you know" not written down) — only the re-transcription catches them.
+The editor now: arbitrates Whisper vs aligner timings with the real audio, and splits out any silence > 0.45 s.
+
 ## Retention targets (user's YouTube Studio): >= 80% average viewed, 70-80% stayed-to-watch
 Research (Nov 2026: Galloway/Gileta 3.3B-view Shorts study via QuickReel, Aibrify, Komet, quso) — apply every time:
 - "Stayed to watch" (viewed vs swiped) is the gate: <60% rarely performs, 70-90% breaks out. 50-60% of drop-off is

@@ -170,6 +170,8 @@ def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12, 
         ks = sorted(set(ks) | set(back))
     for j in risky:
         log(f"  RISK cut glued to '{allw[j]['w']}' @ {allw[j].get('s_ws', allw[j]['s']):.2f} (segment edge: move it)")
+    if env is not None:
+        edl = _split_silences(sorted(edl), env, ref - 25)
     merged = []
     for a, b in edl:
         if merged and a <= merged[-1][1] + 0.01:
@@ -179,6 +181,30 @@ def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12, 
     for p_ in merged:
         p_[1] = p_[0] + max(1, round((p_[1] - p_[0]) * fps)) / fps
     return merged, [allw[i] for i in ks]
+
+
+def _silfrac(env, a, b, q):
+    seg = env[int(a * 100):max(int(a * 100) + 1, int(b * 100))]
+    return float((seg < q).mean())
+
+
+def _split_silences(edl, env, q, max_sil=0.45, keep=0.12):
+    """safety net: no piece may contain a silence longer than max_sil, whatever the word timings say."""
+    out = []
+    for a, b in edl:
+        i, j0, cur = int(a * 100), int(a * 100), a
+        while i < int(b * 100):
+            if env[i] < q:
+                k = i
+                while k < int(b * 100) and env[k] < q:
+                    k += 1
+                if (k - i) / 100 > max_sil and i / 100 - cur > 0.05 and b - k / 100 > 0.05:
+                    out.append([cur, i / 100 + keep]); cur = k / 100 - keep
+                i = k
+            else:
+                i += 1
+        out.append([cur, b])
+    return out
 
 
 def _silent(env, a, b, q, last):
@@ -209,9 +235,20 @@ def _edl3(allw, ks, pause, pre, post, env, ref, trust_aligner=False):
         w0, w1 = allw[f], allw[l]
         # take the earlier/later of the two estimates only when they roughly agree (Whisper is sometimes ~1 s off)
         s_ws, e_ws = w0.get("s_ws", w0["s"]), w1.get("e_ws", w1["e"])
-        lim = 0.25 if trust_aligner else 99
-        s_min = min(w0["s"], s_ws) if abs(s_ws - w0["s"]) < lim else w0["s"]
-        e_max = max(w1["e"], e_ws) if abs(e_ws - w1["e"]) < lim else w1["e"]
+        if abs(s_ws - w0["s"]) < 0.25:
+            s_min = min(w0["s"], s_ws)
+        elif trust_aligner or env is None:
+            s_min = w0["s"]
+        else:                                  # estimates disagree: if the audio between them is silent, the later one is right
+            a_, b_ = sorted((s_ws, w0["s"]))
+            s_min = b_ if _silfrac(env, a_, b_, ref - 22) > 0.5 else a_
+        if abs(e_ws - w1["e"]) < 0.25:
+            e_max = max(w1["e"], e_ws)
+        elif trust_aligner or env is None:
+            e_max = w1["e"]
+        else:                                  # if the audio between them is silent, the earlier end is right
+            a_, b_ = sorted((e_ws, w1["e"]))
+            e_max = a_ if _silfrac(env, a_, b_, ref - 22) > 0.5 else b_
         if env is None:
             edl.append([s_min - pre, e_max + post]); continue
         # IN: the last silence before the first word's onset (never inside the removed word before it)
