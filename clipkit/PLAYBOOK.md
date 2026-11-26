@@ -11,6 +11,7 @@ cd clipkit && ./setup.sh        # pip deps (opencv-contrib 4.10 — NOT 5.x), wh
 Needs ffmpeg + python3. If `setup.sh` fails on a host, report the blocked host; don't route around policies.
 
 ## 1. Get the video
+- yt-dlp is installed, but YouTube blocks cloud servers ("confirm you're not a bot"); it works on a home computer.
 - Google Drive link: `gdown <FILE_ID> -O work/` (the ID is the part after `/d/`). Rename to `work/src.mp4`.
 - YouTube links usually fail from cloud servers ("confirm you're not a bot") — ask for a Drive link instead.
   Never use third-party mirror/proxy sites.
@@ -84,7 +85,7 @@ say so and ask the user to listen.
 ## Editing v3 (use this for every clip)
 1. Pin exact word boundaries with the forced aligner (Whisper times are ~100 ms off, which clipped words):
    `python3 -I align.py work/src.mp4 work/m1.words.json work/m1.aligned.json` → use the `.aligned.json` as `words`.
-2. Spec: `"edit": "v3"`, `"speed": 1.08`, optional `"drop_at": [source times of words to remove]`,
+2. Spec: `"edit": "v3"`, `"speed": 1.03`, optional `"drop_at": [source times of words to remove]`,
    `"sr": true` for 720p or lower sources (FSRCNN AI upscale; stops the blur when cropping to vertical).
 3. v3 removes um/uh, "you know", "I mean", stutters and restarts, and only cuts pauses longer than 0.5 s,
    leaving 80 ms before / 120 ms after every word. It does NOT chop every 0.1 s gap (the user called that jittery).
@@ -96,7 +97,18 @@ say so and ask the user to listen.
    Look at a 30 fps frame strip around every camera change for flashes.
 
 ## Retention targets (user's YouTube Studio): >= 80% average viewed, 70-80% stayed-to-watch
-- 18-25 s final length; zero dead air; 1.08x speed; end on the peak line; ideally the last line loops into the first.
+Research (Nov 2026: Galloway/Gileta 3.3B-view Shorts study via QuickReel, Aibrify, Komet, quso) — apply every time:
+- "Stayed to watch" (viewed vs swiped) is the gate: <60% rarely performs, 70-90% breaks out. 50-60% of drop-off is
+  in the first 3 s. Frame 1 = the strongest claim, mid-thought. No setup sentence, no intro, no logo animation.
+- Hook text states the OUTCOME / stakes ("$1B CEO spends 3 hours a week with his wife"), doesn't just echo audio.
+- Captions on screen from frame 1, 1-2 words, high contrast.
+- Something changes on screen every ~1.5-2.5 s (caption swap, B-roll, punch zoom); B-roll at least every 8-12 s.
+- Length 20-35 s. One idea per clip. End on the payoff/reaction, never on an explanation or a trailing "so...".
+- Seamless loop: the renderer dissolves the last 0.45 s into frame 1 (`"loop": 0.45`, 0 disables). Rewatches push
+  average % viewed past 100% at second 1 on the retention graph.
+- Speed: max 1.03x (the user noticed 1.08x as "obvious and forced").
+- Music bed ~10-20% of voice level: `"music_db": -17, "duck_ratio": 2.5`.
+- Ask the user for each clip's retention graph screenshot; a cliff at 0-3 s = hook problem, a later cliff = slow middle.
 
 ## Hard-won lessons (don't repeat these mistakes)
 - Never send a test render made from a DIFFERENT podcast — test on the episode you're clipping.

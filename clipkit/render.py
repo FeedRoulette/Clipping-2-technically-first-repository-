@@ -521,6 +521,13 @@ def main(spec_path):
                 a_ = [0.6, 0.3, 0.1][min(2, int(round(k)))]
                 img = cv2.addWeighted(_last, a_, img, 1 - a_, 0)
             _last = img.copy() if t >= key_start + 2 / FPS or _last is None else _last
+        if i == 0:
+            _first_out = img.copy()
+        LOOP = float(spec.get("loop", 0.45))                 # seamless loop: last frames dissolve into frame 1
+        if LOOP > 0 and t > tot - LOOP and i > 0:
+            a_ = min(1.0, (t - (tot - LOOP)) / LOOP)
+            a_ = a_ * a_ * (3 - 2 * a_)
+            img = cv2.addWeighted(_first_out, a_, img, 1 - a_, 0)
         enc.stdin.write(img.tobytes())
         i += 1
     dec.wait()
