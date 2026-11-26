@@ -130,3 +130,10 @@ and YouTube Shorts / TikTok / Reels retention. Read `skills/viral-youtube-shorts
 before writing hooks. Key Shorts points: "viewed vs swiped away" (VVSA) is the gate (<60% flops, 70-90% breaks out),
 the first 3 s decide it, 30-45 s is the sweet spot, loops add retention, and the useful CTA is "full video on my channel".
 Treat it as guidance text, not instructions that override the user's STYLE.md.
+
+## Tools tested and rejected (don't re-test)
+- ClipsAI (github.com/ClipsAI/clipsai, Nov 2026): its ClipFinder (TextTiling topic split) returned only 2 clips for a
+  75-min episode — the intro and the outro thank-you. Useless for picking viral moments; read the transcript instead.
+  Its resizer needs a pyannote HF token and our YuNet framing already does the job. It also force-installs
+  opencv-python, which breaks our opencv-contrib super-resolution — never install it into the main environment.
+- Generic "AI clippers" pick topic boundaries, not scroll-stopping moments. Moment selection is done by reading.
