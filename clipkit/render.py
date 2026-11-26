@@ -274,12 +274,21 @@ def main(spec_path):
     print(name, "pieces", len(edl), "duration", round(mp.total, 1), flush=True)
     if mp.total > spec.get("max_len", 31):
         raise SystemExit(f"too long: {mp.total:.1f}s")
-    cutp = wd / "cut.mp4"
-    M.cut(edl, cutp)
     plan = []
     for a_, b_, *_ in sorted(spec["segments"]):                     # only scan the pieces we use
         plan += M.analyze(a_ - 0.3, b_ + 0.4)
     plan.sort(key=lambda p: p["t0"])
+    # never open on a 1-3 frame sliver of another camera (it also shows on every loop): start on the new shot
+    first_word = min((w["s"] for w in (kept_v2 or words)), default=edl[0][1])
+    for p_ in plan:
+        if edl[0][0] < p_["t0"] <= edl[0][0] + 0.3 and p_["t0"] < first_word - 0.02:
+            n_ = round((edl[0][1] - p_["t0"]) * FPS)
+            edl[0] = [edl[0][1] - n_ / FPS, edl[0][1]]
+            mp = M.Map(edl)
+            print("  start moved to camera cut", round(edl[0][0], 3), flush=True)
+            break
+    cutp = wd / "cut.mp4"
+    M.cut(edl, cutp)
 
     ow = []
     for w in words:
