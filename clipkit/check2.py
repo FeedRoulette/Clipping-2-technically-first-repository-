@@ -13,7 +13,7 @@ for w in json.load(open(spec["words"])):
     else:
         words.append(w)
 env = M._energy()
-edl, kept = (edl2.build3(words, spec["segments"], 30, spec.get("drop_at", [])) if spec.get("edit") == "v3" else edl2.build(words, spec["segments"], env, 30, spec.get("drop_at", [])))
+edl, kept = (edl2.build3(words, spec["segments"], 30, spec.get("drop_at", []), env=env) if spec.get("edit") == "v3" else edl2.build(words, spec["segments"], env, 30, spec.get("drop_at", [])))
 total = sum(b - a for a, b in edl)
 sp = float(spec.get("speed", 1.0))
 speech = np.percentile(env, 75)

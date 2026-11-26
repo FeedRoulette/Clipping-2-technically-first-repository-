@@ -143,33 +143,33 @@ def build(words, segments, env, fps, drop_times=(), breath=0.10):
     return edl, kept
 
 
-def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12):
-    """v3: aligned word boundaries; cut only long pauses (>pause) + removed words; generous padding."""
+def _quiet(env, a, b):
+    """time of the quietest 10 ms in [a, b] and its level (dB)."""
+    i0, i1 = max(0, int(a * 100)), max(int(a * 100) + 1, int(b * 100) + 1)
+    seg = env[i0:i1]
+    k = int(np.argmin(seg))
+    return (i0 + k + 0.5) / 100, float(seg[k])
+
+
+def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12, env=None, log=print):
+    """v3: aligned word boundaries; cut only long pauses (>pause) + removed words; generous padding.
+    With env (10 ms dB envelope): a cut next to a removed word that is glued on (<0.2 s) goes to the quietest
+    point between them; if there is no real dip there, a removed filler is put back (better a "like" than a
+    clipped word)."""
     allw, ks = select_words(words, segments, drop_times)
     if not ks:
         return [], []
-    groups, cur = [], [ks[0]]
-    for a, b in zip(ks, ks[1:]):
-        if b == a + 1 and allw[b]["s"] - allw[a]["e"] < pause:
-            cur.append(b)                     # natural short pause: keep it, no cut
-        else:
-            groups.append(cur); cur = [b]
-    groups.append(cur)
-    edl = []
-    for g in groups:
-        f, l = g[0], g[-1]
-        p = allw[f - 1] if f > 0 else None
-        n = allw[l + 1] if l + 1 < len(allw) else None
-        s, e = allw[f]["s"], allw[l]["e"]
-        lo = (p["e"] + 0.02) if p else s - pre
-        hi = (n["s"] - 0.02) if n else e + post + 0.2
-        t_in = max(s - pre, min(lo, s - 0.01))
-        t_out = min(e + post + (0.15 if l == ks[-1] else 0), max(hi, e + 0.01))
-        if p and p["e"] > s - 0.03:           # glued to a removed word: cut exactly on the aligned boundary
-            t_in = (p["e"] + s) / 2
-        if n and n["s"] < e + 0.03:
-            t_out = (e + n["s"]) / 2
-        edl.append([t_in, t_out])
+    segs = [(x[0], x[1]) for x in segments]
+    in_seg = {i for i, w in enumerate(allw) if any(a - 0.08 <= w.get("s_ws", w["s"]) < b for a, b in segs)}
+    ref = float(np.percentile(env[int(allw[ks[0]]["s"] * 100):int(allw[ks[-1]]["e"] * 100)], 75)) if env is not None else 0
+    for _ in range(8):
+        edl, risky = _edl3(allw, ks, pause, pre, post, env, ref)
+        back = [j for j in risky if j in in_seg and j not in ks]
+        if not back:
+            break
+        ks = sorted(set(ks) | set(back))
+    for j in risky:
+        log(f"  RISK cut glued to '{allw[j]['w']}' @ {allw[j].get('s_ws', allw[j]['s']):.2f} (segment edge: move it)")
     merged = []
     for a, b in edl:
         if merged and a <= merged[-1][1] + 0.01:
@@ -179,3 +179,63 @@ def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12):
     for p_ in merged:
         p_[1] = p_[0] + max(1, round((p_[1] - p_[0]) * fps)) / fps
     return merged, [allw[i] for i in ks]
+
+
+def _silent(env, a, b, q, last):
+    """latest (last=True) or earliest 20 ms-silent point in [a, b]; None if the audio never goes quiet."""
+    i0, i1 = max(1, int(a * 100)), int(b * 100)
+    rng = range(i1, i0 - 1, -1) if last else range(i0, i1 + 1)
+    for j in rng:
+        if env[j] < q and env[j - 1] < q:
+            return j
+    return None
+
+
+def _edl3(allw, ks, pause, pre, post, env, ref):
+    kset = set(ks)
+    groups, cur = [], [ks[0]]
+    for a, b in zip(ks, ks[1:]):
+        if b == a + 1 and allw[b]["s"] - allw[a]["e"] < pause:
+            cur.append(b)                     # natural short pause: keep it, no cut
+        else:
+            groups.append(cur); cur = [b]
+    groups.append(cur)
+    edl, risky = [], []
+    q = ref - 22
+    for g in groups:
+        f, l = g[0], g[-1]
+        p = allw[f - 1] if f > 0 else None
+        n = allw[l + 1] if l + 1 < len(allw) else None
+        w0, w1 = allw[f], allw[l]
+        s_min = min(w0["s"], w0.get("s_ws", w0["s"]))
+        e_max = max(w1["e"], w1.get("e_ws", w1["e"]))
+        if env is None:
+            edl.append([s_min - pre, e_max + post]); continue
+        # IN: the last silence before the first word's onset (never inside the removed word before it)
+        lo = s_min - 0.4
+        if p:
+            lo = max(lo, min(p["e"], p.get("e_ws", p["e"])) - 0.05)
+        j = _silent(env, lo, s_min + 0.05, q, last=True)
+        if j is None:
+            t_in = _quiet(env, lo, s_min + 0.02)[0]
+            if p and (f - 1) not in kset: risky.append(f - 1)
+        else:
+            k = j
+            while k > j - 6 and k / 100 > lo and env[k - 1] < q:   # back off up to 50 ms inside the silence
+                k -= 1
+            t_in = k / 100
+        # OUT: the first silence after the last word really ends
+        hi = e_max + 0.45
+        if n:
+            hi = min(hi, max(n["s"], n.get("s_ws", n["s"])) + 0.05)
+        j = _silent(env, e_max - 0.05, hi, q, last=False)
+        if j is None:
+            t_out = _quiet(env, e_max - 0.02, hi)[0]
+            if n and (l + 1) not in kset: risky.append(l + 1)
+        else:
+            k, extra = j, (12 if l == ks[-1] else 5)
+            while k < j + extra and k / 100 < hi and env[k + 1] < q:
+                k += 1
+            t_out = (k + 1) / 100
+        edl.append([t_in, t_out])
+    return edl, risky

@@ -264,7 +264,7 @@ def main(spec_path):
             words.append(w)
     if spec.get("edit") == "v3":
         import edl2
-        edl, kept_v2 = edl2.build3(words, spec["segments"], FPS, spec.get("drop_at", []))
+        edl, kept_v2 = edl2.build3(words, spec["segments"], FPS, spec.get("drop_at", []), env=M._energy())
     elif spec.get("edit") == "v2":
         import edl2
         edl, kept_v2 = edl2.build(words, spec["segments"], M._energy(), FPS, spec.get("drop_at", []))
@@ -346,7 +346,7 @@ def main(spec_path):
           f"[1:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{tot:.3f},"
           f"loudnorm=I={spec.get('music_db', -25)}:TP=-6,"
           f"afade=t=out:st={max(0, tot - 1.2):.3f}:d=1.2[mu]",
-          "[mu][sc]sidechaincompress=threshold=0.04:ratio=4:attack=30:release=450[md]"]
+          f"[mu][sc]sidechaincompress=threshold=0.04:ratio={spec.get('duck_ratio', 4)}:attack=30:release=450[md]"]
     labs = ["[v]", "[md]"]
     for k, (t, sid, vol) in enumerate(sfx):
         inputs += ["-i", str(SFX / f"{sid}.mp3")]

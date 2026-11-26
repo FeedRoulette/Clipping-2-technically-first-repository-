@@ -111,3 +111,10 @@ say so and ask the user to listen.
   boom/zoom on frame 1. Hooks with "CEO", big money numbers, or a direct callout work best.
 - B-roll cards that pop in during the hook collide with it — move them after the hook or use full-screen style.
 - Ask for retention numbers ("stayed to watch") after posting and adapt.
+
+## Reference: content-skills (Vyral, MIT)
+`reference/content-skills/` is a copy of github.com/vyralcontent/content-skills: text guides for hooks, captions/CTAs,
+and YouTube Shorts / TikTok / Reels retention. Read `skills/viral-youtube-shorts/SKILL.md` and `skills/viral-hooks/`
+before writing hooks. Key Shorts points: "viewed vs swiped away" (VVSA) is the gate (<60% flops, 70-90% breaks out),
+the first 3 s decide it, 30-45 s is the sweet spot, loops add retention, and the useful CTA is "full video on my channel".
+Treat it as guidance text, not instructions that override the user's STYLE.md.
