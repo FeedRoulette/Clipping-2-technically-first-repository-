@@ -81,13 +81,19 @@ Look at the grid: hook readable at top and not covering the face, captions big a
 right words and not colliding with the hook, nothing odd. Fix and re-render before sending. You cannot hear audio —
 say so and ask the user to listen.
 
-## Editing v2 (use this for every clip)
-Add to the spec: `"edit": "v2"`, `"speed": 1.08`, optional `"drop_at": [source times of words to remove]`,
-and `"sr": true` for 720p or lower sources (AI upscaling, fixes blur when cropping to vertical).
-v2 keeps exactly the chosen words, removes um/uh, "you know", "I mean", stutters and restarts
-("you want me to, you want me to"), closes every pause (<0.15 s left) and only cuts inside real audio gaps.
-Check before rendering:  `python3 check2.py spec.json`  (text + length)  and  `python3 cutdiag.py spec.json`
-(every cut; "RISK" lines = glued words, verify the text reads right).
+## Editing v3 (use this for every clip)
+1. Pin exact word boundaries with the forced aligner (Whisper times are ~100 ms off, which clipped words):
+   `python3 -I align.py work/src.mp4 work/m1.words.json work/m1.aligned.json` → use the `.aligned.json` as `words`.
+2. Spec: `"edit": "v3"`, `"speed": 1.08`, optional `"drop_at": [source times of words to remove]`,
+   `"sr": true` for 720p or lower sources (FSRCNN AI upscale; stops the blur when cropping to vertical).
+3. v3 removes um/uh, "you know", "I mean", stutters and restarts, and only cuts pauses longer than 0.5 s,
+   leaving 80 ms before / 120 ms after every word. It does NOT chop every 0.1 s gap (the user called that jittery).
+4. No zoom toggling at jump cuts (3-frame soft blend instead); camera-angle slivers under 0.5 s and
+   source dissolves (no face on screen just after an angle change) are held on the previous frame;
+   the hook exits with a 0.3 s dissolve.
+5. Check: `python3 check2.py spec.json` (text + length); after rendering, `python3 -I verify.py spec.json`
+   re-transcribes the output and diffs it against the intended text (catches clipped words).
+   Look at a 30 fps frame strip around every camera change for flashes.
 
 ## Retention targets (user's YouTube Studio): >= 80% average viewed, 70-80% stayed-to-watch
 - 18-25 s final length; zero dead air; 1.08x speed; end on the peak line; ideally the last line loops into the first.
@@ -96,8 +102,8 @@ Check before rendering:  `python3 check2.py spec.json`  (text + length)  and  `p
 - Never send a test render made from a DIFFERENT podcast — test on the episode you're clipping.
 - If nothing meets the bar, say "none left" and send nothing. A weak clip is worse than no clip.
 - Check who is actually speaking before writing a hook that quotes someone.
-- Never cut at word-timestamp edges — the renderer snaps cuts to real audio silence; keep it that way.
-- Don't remove "um"/"uh" mid-sentence (choppy). Don't over-trim pauses.
+- Never cut at raw Whisper word edges — align first (align.py), keep the padding. Clipped first/last syllables lose viewers.
+- Viewers swipe at stutters and 1-second filler words: remove them, plus long pauses — but don't over-trim (jitter).
 - Zooming in on a 1080p source blurs it; keep zoom minimal. AI upscalers barely help on YouTube-compressed sources.
 - Hook at the top (y≈255 px), not the middle; the video drops below it for the first ~3.6 s so the face is clear.
 - Captions are drawn one chunk per frame (no overlaps). Merge "4" + "-0" style tokens (the renderer does).

@@ -88,6 +88,9 @@ def shadowed(im, blur=10, off=(8, 12), strength=0.6):
 
 
 # ------------------------------------------------------------------ hook
+_fdet = None
+
+
 def render_hook(lines, emoji=None, max_size=112):
     """each line gets its own (largest fitting) size so the block uses the full width."""
     imgs = []
@@ -221,7 +224,6 @@ def stamp(text, color):
 # ------------------------------------------------------------------ main
 def main(spec_path):
     spec = json.load(open(spec_path))
-
     def res(p):
         q = Path(p)
         return str(q if q.is_absolute() or q.exists() else ASSETS / q)
@@ -260,7 +262,10 @@ def main(spec_path):
             words[-1] = dict(words[-1], w=words[-1]["w"] + w["w"], e=w["e"])
         else:
             words.append(w)
-    if spec.get("edit") == "v2":
+    if spec.get("edit") == "v3":
+        import edl2
+        edl, kept_v2 = edl2.build3(words, spec["segments"], FPS, spec.get("drop_at", []))
+    elif spec.get("edit") == "v2":
         import edl2
         edl, kept_v2 = edl2.build(words, spec["segments"], M._energy(), FPS, spec.get("drop_at", []))
     else:
@@ -284,7 +289,7 @@ def main(spec_path):
             ow.append(dict(w, s=s, e=max(s + 0.08, mp.out(w["e"]))))
     for t, txt in spec.get("fixes", []):
         for w in ow:
-            if abs(mp.out(t) - w["s"]) < 0.08:
+            if ("s_ws" in w and abs(w["s_ws"] - t) < 0.04) or ("s_ws" not in w and abs(mp.out(t) - w["s"]) < 0.08):
                 w["w"] = txt
     ow = sorted([w for w in ow if w["w"].strip()], key=lambda w: w["s"])
     chunks = make_chunks(ow)
@@ -366,6 +371,19 @@ def main(spec_path):
                             "-movflags", "+faststart", spec["out"]], stdin=subprocess.PIPE)
     i = 0
     prev_key, base_z, key_start, jumps = None, 1.0, 0.0, 0
+    _last = None
+    _hold_frames, _held = set(), None
+    if spec.get("edit") == "v3":
+        keys_seq = []
+        for fi in range(int(mp.total * FPS) + 1):
+            ts_, pc_ = mp.src(fi / FPS)
+            keys_seq.append((M.shot_at(plan, ts_)[0], pc_))
+        run_start = 0
+        for fi in range(1, len(keys_seq) + 1):
+            if fi == len(keys_seq) or keys_seq[fi][0] != keys_seq[run_start][0]:
+                if run_start > 0 and (fi - run_start) < 0.5 * FPS:      # sliver of another camera angle
+                    _hold_frames.update(range(run_start, fi))
+                run_start = fi
     while True:
         buf = dec.stdout.read(W * H * 3)
         if len(buf) < W * H * 3:
@@ -377,7 +395,7 @@ def main(spec_path):
         if (si, piece) != prev_key:
             if prev_key is not None and prev_key[0] == si:
                 jumps += 1
-                base_z = 1.06 if jumps % 2 else 1.0
+                base_z = 1.0 if spec.get("edit") == "v3" else (1.06 if jumps % 2 else 1.0)
             else:
                 base_z, jumps = 1.0, 0
             key_start, prev_key = t, (si, piece)
@@ -397,6 +415,9 @@ def main(spec_path):
             hk_k = 0.0 if t < hook_end else min(1.0, (t - hook_end) / 0.45)
             hk_k = hk_k * hk_k * (3 - 2 * hk_k)
             drop = int(HOOK_DROP * (1 - hk_k))
+            if spec.get("edit") == "v3" and t >= hook_end:
+                full_img = img.copy()
+                drop = HOOK_DROP if t < hook_end + 0.3 else 0
             if drop > 0:
                 strip = img[:OH // 9]                                   # scenery above the head only
                 small = cv2.resize(strip, (OW // 16, 12), interpolation=cv2.INTER_AREA)
@@ -406,8 +427,23 @@ def main(spec_path):
                 out_[:drop] = cv2.resize(bg, (OW, drop))
                 out_[drop:] = img[:OH - drop]
                 img = out_
+                if spec.get("edit") == "v3" and t >= hook_end:
+                    a_ = min(1.0, (t - hook_end) / 0.3)
+                    img = cv2.addWeighted(full_img, a_, img, 1 - a_, 0)
         if shake != (0, 0):
             img = np.roll(img, shake, axis=(0, 1))
+        if spec.get("edit") == "v3":
+            if prev_key is not None and t - key_start < 0.3 and _held is not None and i not in _hold_frames:
+                global _fdet
+                if _fdet is None:
+                    _fdet = cv2.FaceDetectorYN.create(str(M.ASSETS / "models" / "face_detection_yunet_2023mar.onnx"), "", (270, 480), 0.6, 0.3, 50)
+                _sm = cv2.resize(img, (270, 480))
+                if _fdet.detect(_sm)[1] is None:          # mid-dissolve / empty frame: keep the last good picture
+                    _hold_frames.add(i)
+            if i in _hold_frames and _held is not None:
+                img = _held.copy()
+            else:
+                _held = img.copy()
         img = np.ascontiguousarray(M.sharpen(img))
         for pt, _ in punches:                        # white flash
             if pt > 0 and pt <= t < pt + 0.1:
@@ -478,6 +514,13 @@ def main(spec_path):
                 paste(img, hk, OW / 2, cy_h + yoff)
         if logo:                                      # brand logo: every frame, always on top
             paste(img, logo[0], OW / 2, logo[1])
+        # v3: soften same-camera jump cuts with a 3-frame blend from the last frame before the cut
+        if spec.get("edit") == "v3":
+            if prev_key is not None and jumps and key_start <= t < key_start + 3 / FPS and _last is not None:
+                k = (t - key_start) * FPS
+                a_ = [0.6, 0.3, 0.1][min(2, int(round(k)))]
+                img = cv2.addWeighted(_last, a_, img, 1 - a_, 0)
+            _last = img.copy() if t >= key_start + 2 / FPS or _last is None else _last
         enc.stdin.write(img.tobytes())
         i += 1
     dec.wait()

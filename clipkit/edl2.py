@@ -14,12 +14,12 @@ def _n(w):
 def select_words(words, segments, drop_times=()):
     allw = sorted(words, key=lambda w: w["s"])
     segs = [(x[0], x[1]) for x in segments]
-    keep = [i for i, w in enumerate(allw) if any(a - 0.08 <= w["s"] < b for a, b in segs)]
+    keep = [i for i, w in enumerate(allw) if any(a - 0.08 <= w.get("s_ws", w["s"]) < b for a, b in segs)]
     drop = set()
     for i in keep:
         if _n(allw[i]["w"]) in FILLERS:
             drop.add(i)
-        if any(abs(allw[i]["s"] - t) < 0.04 for t in drop_times):
+        if any(abs(allw[i].get("s_ws", allw[i]["s"]) - t) < 0.04 for t in drop_times):
             drop.add(i)
     ks = [i for i in keep if i not in drop]
     # bigram fillers ("you know", "i mean")
@@ -141,3 +141,41 @@ def build(words, segments, env, fps, drop_times=(), breath=0.10):
         p_[1] = p_[0] + max(1, round((p_[1] - p_[0]) * fps)) / fps
     kept = [allw[i] for i in ks]
     return edl, kept
+
+
+def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12):
+    """v3: aligned word boundaries; cut only long pauses (>pause) + removed words; generous padding."""
+    allw, ks = select_words(words, segments, drop_times)
+    if not ks:
+        return [], []
+    groups, cur = [], [ks[0]]
+    for a, b in zip(ks, ks[1:]):
+        if b == a + 1 and allw[b]["s"] - allw[a]["e"] < pause:
+            cur.append(b)                     # natural short pause: keep it, no cut
+        else:
+            groups.append(cur); cur = [b]
+    groups.append(cur)
+    edl = []
+    for g in groups:
+        f, l = g[0], g[-1]
+        p = allw[f - 1] if f > 0 else None
+        n = allw[l + 1] if l + 1 < len(allw) else None
+        s, e = allw[f]["s"], allw[l]["e"]
+        lo = (p["e"] + 0.02) if p else s - pre
+        hi = (n["s"] - 0.02) if n else e + post + 0.2
+        t_in = max(s - pre, min(lo, s - 0.01))
+        t_out = min(e + post + (0.15 if l == ks[-1] else 0), max(hi, e + 0.01))
+        if p and p["e"] > s - 0.03:           # glued to a removed word: cut exactly on the aligned boundary
+            t_in = (p["e"] + s) / 2
+        if n and n["s"] < e + 0.03:
+            t_out = (e + n["s"]) / 2
+        edl.append([t_in, t_out])
+    merged = []
+    for a, b in edl:
+        if merged and a <= merged[-1][1] + 0.01:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    for p_ in merged:
+        p_[1] = p_[0] + max(1, round((p_[1] - p_[0]) * fps)) / fps
+    return merged, [allw[i] for i in ks]

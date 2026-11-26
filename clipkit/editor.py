@@ -163,10 +163,13 @@ class Map:
 
 
 # ------------------------------------------------------------------ shot analysis on the source
+AN_FPS = 30
+
+
 def analyze(a, b):
     det = cv2.FaceDetectorYN.create(str(ASSETS / "models" / "face_detection_yunet_2023mar.onnx"), "", (960, 540), 0.75, 0.3, 50)
     p = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{a:.2f}", "-to", f"{b:.2f}", "-i", SRC,
-                          "-vf", "fps=10,scale=960:540", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+                          "-vf", f"fps={AN_FPS},scale=960:540", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
                          stdout=subprocess.PIPE)
     S, prev = [], None
     i = 0
@@ -181,7 +184,7 @@ def analyze(a, b):
         _, faces = det.detect(fr)
         fl = [{"cx": (f[0] + f[2] / 2) / 960, "cy": (f[1] + f[3] / 2) / 540, "h": f[3] / 540}
               for f in (faces if faces is not None else []) if f[2] * f[3] > 960 * 540 * 0.0015]
-        S.append({"t": a + i / 10, "cut": cutf, "faces": fl})
+        S.append({"t": a + i / AN_FPS, "cut": cutf, "faces": fl})
         prev = h
         i += 1
     p.wait()
@@ -203,7 +206,7 @@ def analyze(a, b):
                 clusters.append([x])
         people = [c for c in clusters if len(c) >= max(2, len(sh) * 0.3)]
         allf = [f for s in sh for f in s["faces"]]
-        entry = {"t0": sh[0]["t"], "t1": sh[-1]["t"] + 0.1}
+        entry = {"t0": sh[0]["t"], "t1": sh[-1]["t"] + 1 / AN_FPS}
         if len(people) >= 2:
             p1, p2 = people[0], people[-1]
             ys1 = [f["cy"] for f in allf if abs(f["cx"] - np.median(p1)) < 0.1]
@@ -218,13 +221,22 @@ def analyze(a, b):
                          y=float(np.median([f["cy"] for f in fs])), fh=float(np.median([f["h"] for f in fs])))
         else:
             entry.update(mode="single", x=0.5, y=0.4, fh=0.3)
+        entry["nf"] = len(people)
         plan.append(entry)
+    # very short shots (camera dissolves, 1-12 frames) borrow the framing of the next real shot
+    for k in range(len(plan)):
+        if plan[k]["t1"] - plan[k]["t0"] < 0.4:
+            src = next((plan[j] for j in range(k + 1, len(plan)) if plan[j]["t1"] - plan[j]["t0"] >= 0.4), None)
+            src = src or next((plan[j] for j in range(k - 1, -1, -1) if plan[j]["t1"] - plan[j]["t0"] >= 0.4), None)
+            if src:
+                t0, t1 = plan[k]["t0"], plan[k]["t1"]
+                plan[k] = dict(src, t0=t0, t1=t1)
     return plan
 
 
 def shot_at(plan, ts):
     for i, p in enumerate(plan):
-        if p["t0"] - 0.05 <= ts < p["t1"]:
+        if p["t0"] - 0.005 <= ts < p["t1"]:
             return i, p
     return len(plan) - 1, plan[-1]
 
