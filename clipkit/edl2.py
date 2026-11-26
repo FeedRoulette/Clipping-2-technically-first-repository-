@@ -151,7 +151,7 @@ def _quiet(env, a, b):
     return (i0 + k + 0.5) / 100, float(seg[k])
 
 
-def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12, env=None, log=print):
+def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12, env=None, log=print, trust_aligner=False):
     """v3: aligned word boundaries; cut only long pauses (>pause) + removed words; generous padding.
     With env (10 ms dB envelope): a cut next to a removed word that is glued on (<0.2 s) goes to the quietest
     point between them; if there is no real dip there, a removed filler is put back (better a "like" than a
@@ -163,7 +163,7 @@ def build3(words, segments, fps, drop_times=(), pause=0.5, pre=0.08, post=0.12, 
     in_seg = {i for i, w in enumerate(allw) if any(a - 0.08 <= w.get("s_ws", w["s"]) < b for a, b in segs)}
     ref = float(np.percentile(env[int(allw[ks[0]]["s"] * 100):int(allw[ks[-1]]["e"] * 100)], 75)) if env is not None else 0
     for _ in range(8):
-        edl, risky = _edl3(allw, ks, pause, pre, post, env, ref)
+        edl, risky = _edl3(allw, ks, pause, pre, post, env, ref, trust_aligner)
         back = [j for j in risky if j in in_seg and j not in ks]
         if not back:
             break
@@ -191,7 +191,7 @@ def _silent(env, a, b, q, last):
     return None
 
 
-def _edl3(allw, ks, pause, pre, post, env, ref):
+def _edl3(allw, ks, pause, pre, post, env, ref, trust_aligner=False):
     kset = set(ks)
     groups, cur = [], [ks[0]]
     for a, b in zip(ks, ks[1:]):
@@ -207,8 +207,11 @@ def _edl3(allw, ks, pause, pre, post, env, ref):
         p = allw[f - 1] if f > 0 else None
         n = allw[l + 1] if l + 1 < len(allw) else None
         w0, w1 = allw[f], allw[l]
-        s_min = min(w0["s"], w0.get("s_ws", w0["s"]))
-        e_max = max(w1["e"], w1.get("e_ws", w1["e"]))
+        # take the earlier/later of the two estimates only when they roughly agree (Whisper is sometimes ~1 s off)
+        s_ws, e_ws = w0.get("s_ws", w0["s"]), w1.get("e_ws", w1["e"])
+        lim = 0.25 if trust_aligner else 99
+        s_min = min(w0["s"], s_ws) if abs(s_ws - w0["s"]) < lim else w0["s"]
+        e_max = max(w1["e"], e_ws) if abs(e_ws - w1["e"]) < lim else w1["e"]
         if env is None:
             edl.append([s_min - pre, e_max + post]); continue
         # IN: the last silence before the first word's onset (never inside the removed word before it)

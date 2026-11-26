@@ -264,7 +264,7 @@ def main(spec_path):
             words.append(w)
     if spec.get("edit") == "v3":
         import edl2
-        edl, kept_v2 = edl2.build3(words, spec["segments"], FPS, spec.get("drop_at", []), env=M._energy())
+        edl, kept_v2 = edl2.build3(words, spec["segments"], FPS, spec.get("drop_at", []), env=M._energy(), trust_aligner=spec.get("trust_aligner", False))
     elif spec.get("edit") == "v2":
         import edl2
         edl, kept_v2 = edl2.build(words, spec["segments"], M._energy(), FPS, spec.get("drop_at", []))
@@ -416,7 +416,14 @@ def main(spec_path):
                 pz = max(pz, 0.08 * k)
                 shake = (int(14 * k * math.sin(t * 90)), int(10 * k * math.cos(t * 77)))
         z = base_z + min(0.03, (t - key_start) * 0.006) + pz
-        img = M.compose(fr, shot, z if shot["mode"] != "split" else 1.0 + pz)
+        hf = spec.get("hook_focus")                      # "left"/"right": while the hook is up, one big face, no split
+        if hf and shot["mode"] == "split" and t < hook_end + 0.3:
+            Hs = fr.shape[0]
+            pr = sorted([(shot["x1"], shot["y1"]), (shot["x2"], shot["y2"])])[1 if hf == "right" else 0]
+            ch_p = min(Hs * 0.62, shot["fh"] * Hs * 3.2)
+            img = M.compose(fr, {"mode": "single", "x": pr[0], "y": pr[1]}, max(1.002, Hs / (2.0 * ch_p)) * (1 + pz))
+        else:
+            img = M.compose(fr, shot, z if shot["mode"] != "split" else 1.0 + pz)
         # while the hook is up (at the top), the shot sits lower over a blurred extension of itself,
         # so the hook never covers the face; then it glides up to full frame
         hk_k = 1.0

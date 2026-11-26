@@ -106,6 +106,12 @@ Research (Nov 2026: Galloway/Gileta 3.3B-view Shorts study via QuickReel, Aibrif
 - Length 20-35 s. One idea per clip. End on the payoff/reaction, never on an explanation or a trailing "so...".
 - Seamless loop: the renderer dissolves the last 0.45 s into frame 1 (`"loop": 0.45`, 0 disables). Rewatches push
   average % viewed past 100% at second 1 on the retention graph.
+- Hook text: 2 SHORT lines (<= ~20 chars each, so they render huge) stating stakes + outcome:
+  "SEC STAR QB / REJECTED BY THE NFL". Long lines shrink to unreadable (that clip got 55% swiped away).
+- First 3 s must be ONE big face. If the opening is a wide/split shot, set `"hook_focus": "left"|"right"` (the speaker).
+- Open on the shocking line itself ("They just said I was too much of a liability"), not the setup before it.
+- Stutter-heavy speakers who run words together can't be cleaned without clipping words: skip those moments.
+- `"trust_aligner": true` when Whisper's word times are ~1 s off (a long dead pause survives): uses aligner times only.
 - Speed: max 1.03x (the user noticed 1.08x as "obvious and forced").
 - Music bed ~10-20% of voice level: `"music_db": -17, "duck_ratio": 2.5`.
 - Ask the user for each clip's retention graph screenshot; a cliff at 0-3 s = hook problem, a later cliff = slow middle.
