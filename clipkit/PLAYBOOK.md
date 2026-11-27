@@ -167,3 +167,5 @@ Treat it as guidance text, not instructions that override the user's STYLE.md.
 - `audition.py` uses the same prompt, so fillers show up before rendering.
 - A clip ships only when the line `FILLERS/STUTTERS: none` appears.
 - Considered: CrisperWhisper (purpose-built verbatim ASR), but it's CC BY-NC (non-commercial). The prompt trick covers the need.
+- Re-check older "used" moments: stories that only appeared in a rejected early batch (bad format) are fair game for a proper edit.
+- Funny punchlines: keep a short dramatic pause before the punchline (~0.4 s), cut the dead laugh-gap after it, and end on the host's reaction.
