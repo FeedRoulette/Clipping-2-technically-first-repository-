@@ -406,7 +406,10 @@ def main(spec_path):
         if (si, piece) != prev_key:
             if prev_key is not None and prev_key[0] == si:
                 jumps += 1
-                base_z = 1.0 if spec.get("edit") == "v3" else (1.06 if jumps % 2 else 1.0)
+                if spec.get("jump_zoom"):                  # alternate punch-in on same-camera cuts: hides the head jump
+                    base_z = float(spec["jump_zoom"]) if jumps % 2 else 1.0
+                else:
+                    base_z = 1.0 if spec.get("edit") == "v3" else (1.06 if jumps % 2 else 1.0)
             else:
                 base_z, jumps = 1.0, 0
             key_start, prev_key = t, (si, piece)
@@ -534,7 +537,7 @@ def main(spec_path):
             paste(img, logo[0], OW / 2, logo[1])
         # v3: soften same-camera jump cuts with a 3-frame blend from the last frame before the cut
         if spec.get("edit") == "v3":
-            if prev_key is not None and jumps and key_start <= t < key_start + 3 / FPS and _last is not None:
+            if prev_key is not None and jumps and not spec.get("jump_zoom") and key_start <= t < key_start + 3 / FPS and _last is not None:
                 k = (t - key_start) * FPS
                 a_ = [0.6, 0.3, 0.1][min(2, int(round(k)))]
                 img = cv2.addWeighted(_last, a_, img, 1 - a_, 0)
