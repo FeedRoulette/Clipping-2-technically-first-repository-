@@ -2,7 +2,7 @@ import json, subprocess, sys, re, difflib, os
 import numpy as np
 from faster_whisper import WhisperModel
 sys.path.insert(0, os.path.dirname(__file__))
-import make as M, edl2, fillercheck
+import editor as M, edl2, fillercheck
 m = WhisperModel("large-v3-turbo", device="cpu", compute_type="int8", cpu_threads=4)
 norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower().replace("-", " ").replace("$", "")).split()
 for spec_path in sys.argv[1:]:
