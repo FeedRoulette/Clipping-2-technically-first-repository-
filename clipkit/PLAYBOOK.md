@@ -157,3 +157,6 @@ Treat it as guidance text, not instructions that override the user's STYLE.md.
 - Run audition.py on tiny windows (0.3–0.7s) to find what a sound really is ("Um...", or the tail of a drawn-out word).
 - Whisper in context sometimes hears a drawn-out real word ("lean in") as "um". Confirm by auditioning the piece alone before you cut a real word.
 - An energy dip in the middle of a word can be a plosive closure ("ex-p-lore"), not a word end. Always audition the cut with the next piece attached.
+- Always set CLIP_SRC to the clip's own source before running edlprint, verify or render. Otherwise silence is measured on the wrong audio and the cuts land in random places.
+- `fixes` match Whisper's start time (`s_ws`), not the aligner's `s`. Copy the time from edlprint output.
+- Opening rule (learned from the $1,000 clip, which had 51% swiped away): never open on setup or context ("X is a country in…"). Open on the shocking line itself.
