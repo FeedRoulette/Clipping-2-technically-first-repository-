@@ -236,6 +236,11 @@ def main(spec_path):
     _cc.clear()
     if spec.get("src"):
         M.SRC = spec["src"]
+    global FPS                                           # render at the SOURCE frame rate: 24->30 duplicates every 4th frame (judder)
+    _r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate",
+                         "-of", "csv=p=0", M.SRC], capture_output=True, text=True).stdout.strip().split("/")
+    _sf = float(_r[0]) / float(_r[1]) if len(_r) == 2 and float(_r[1]) else 30.0
+    FPS = M.FPS = int(round(_sf)) if 23 <= _sf <= 31 else 30
     if spec.get("sr"):                                   # AI super-resolution for low-res (720p) sources
         _orig_warp = getattr(M, "_orig_warp", M.warp)
         M._orig_warp = _orig_warp
@@ -558,7 +563,7 @@ def main(spec_path):
     if abs(sp - 1.0) > 0.001:                       # natural-pitch speed-up of the finished clip
         tmp_out = str(spec["out"]) + ".speed.mp4"
         M.run(["ffmpeg", "-y", "-v", "error", "-i", spec["out"], "-filter_complex",
-               f"[0:v]setpts=PTS/{sp},fps={FPS}[v];[0:a]atempo={sp}[a]", "-map", "[v]", "-map", "[a]",
+               f"[0:v]setpts=PTS/{sp}[v];[0:a]atempo={sp}[a]", "-map", "[v]", "-map", "[a]", "-r", f"{FPS * sp:.3f}",  # keep every frame (no drop/dup)
                "-c:v", "libx264", "-preset", "slow", "-crf", "14", "-tune", "film", "-pix_fmt", "yuv420p",
                "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", tmp_out])
         Path(tmp_out).replace(spec["out"])

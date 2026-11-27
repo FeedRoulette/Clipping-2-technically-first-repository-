@@ -2,7 +2,7 @@ import json, subprocess, sys, re, difflib, os
 import numpy as np
 from faster_whisper import WhisperModel
 sys.path.insert(0, os.path.dirname(__file__))
-import editor as M, edl2, fillercheck
+import make as M, edl2, fillercheck
 m = WhisperModel("large-v3-turbo", device="cpu", compute_type="int8", cpu_threads=4)
 norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower().replace("-", " ").replace("$", "")).split()
 for spec_path in sys.argv[1:]:
@@ -27,15 +27,19 @@ for spec_path in sys.argv[1:]:
     jumps = int(((d > med * 4) & (d > 6)).sum())
     print(f"   visual jumps: {jumps} in {len(fr)/30:.1f}s")
     # freezes: picture stalls (frame holds) feel like the video "stopped" - flag any 0.2 s+ near-frozen run
+    ofr = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate", "-of", "csv=p=0", spec["out"]], capture_output=True, text=True).stdout.strip().split("/")
+    ofps = float(ofr[0]) / float(ofr[1])
     p2 = subprocess.run(["ffmpeg", "-v", "error", "-i", spec["out"], "-vf", "scale=128:228,format=gray", "-f", "rawvideo", "-"], capture_output=True).stdout
     f2 = np.frombuffer(p2, np.uint8).reshape(-1, 228, 128).astype(np.float32)
-    d2 = np.abs(np.diff(f2[:, 20:140], axis=0)).mean((1, 2))
+    d2 = np.abs(np.diff(f2, axis=0)).mean((1, 2))          # whole frame: a real freeze = picture AND captions identical
+    dups = int((d2 < 0.05).sum())
     fz, run = [], 0
     for k, v in enumerate(list(d2) + [99]):
-        if v < 0.6: run += 1
+        if v < 0.05: run += 1
         else:
-            if run >= 6: fz.append((round((k - run) / 30, 2), round(k / 30, 2)))
+            if run >= 2: fz.append((round((k - run) / ofps, 2), round(k / ofps, 2)))
             run = 0
+    print(f"   fps {ofps:.2f}  duplicate frames (judder): {dups}")
     print(f"   FREEZES (>=0.2s): {fz or 'none'}")
     # dead air: any stretch with no words (silence OR a dragged "uhhh") the viewer has to sit through
     dur = len(a) / 16000
