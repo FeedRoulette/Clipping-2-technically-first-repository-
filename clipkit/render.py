@@ -392,7 +392,7 @@ def main(spec_path):
         run_start = 0
         for fi in range(1, len(keys_seq) + 1):
             if fi == len(keys_seq) or keys_seq[fi][0] != keys_seq[run_start][0]:
-                if run_start > 0 and (fi - run_start) < 0.5 * FPS:      # sliver of another camera angle
+                if run_start > 0 and (fi - run_start) <= 3:            # 1-3 frame sliver of another angle (longer = real cut, never freeze)
                     _hold_frames.update(range(run_start, fi))
                 run_start = fi
     while True:
@@ -454,7 +454,7 @@ def main(spec_path):
         if shake != (0, 0):
             img = np.roll(img, shake, axis=(0, 1))
         if spec.get("edit") == "v3":
-            if prev_key is not None and t - key_start < 0.3 and _held is not None and i not in _hold_frames:
+            if prev_key is not None and t - key_start < 3 / FPS and _held is not None and i not in _hold_frames:
                 global _fdet
                 if _fdet is None:
                     _fdet = cv2.FaceDetectorYN.create(str(M.ASSETS / "models" / "face_detection_yunet_2023mar.onnx"), "", (270, 480), 0.6, 0.3, 50)

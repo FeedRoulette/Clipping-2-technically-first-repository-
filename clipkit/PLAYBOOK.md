@@ -170,3 +170,4 @@ Treat it as guidance text, not instructions that override the user's STYLE.md.
 - Re-check older "used" moments: stories that only appeared in a rejected early batch (bad format) are fair game for a proper edit.
 - Funny punchlines: keep a short dramatic pause before the punchline (~0.4 s), cut the dead laugh-gap after it, and end on the host's reaction.
 - Jitter fix: set `"jump_zoom": 1.12` in the spec. Same-camera jump cuts then alternate 1.0x/1.12x zoom instead of the 3-frame ghost blend, which read as a stall or freeze (user feedback on clip 14). Use it on every talking-head clip with jump cuts.
+- Freeze gate: `verify.py` now prints `FREEZES (>=0.2s)`, and a clip only ships when it says none. Frame holds are capped at 3 frames. The old 0.5 s "sliver hold" made the video visibly stop (user feedback on clip 14).

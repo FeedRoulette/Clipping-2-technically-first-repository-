@@ -26,6 +26,17 @@ for spec_path in sys.argv[1:]:
     med = np.median(d)
     jumps = int(((d > med * 4) & (d > 6)).sum())
     print(f"   visual jumps: {jumps} in {len(fr)/30:.1f}s")
+    # freezes: picture stalls (frame holds) feel like the video "stopped" - flag any 0.2 s+ near-frozen run
+    p2 = subprocess.run(["ffmpeg", "-v", "error", "-i", spec["out"], "-vf", "scale=128:228,format=gray", "-f", "rawvideo", "-"], capture_output=True).stdout
+    f2 = np.frombuffer(p2, np.uint8).reshape(-1, 228, 128).astype(np.float32)
+    d2 = np.abs(np.diff(f2[:, 20:140], axis=0)).mean((1, 2))
+    fz, run = [], 0
+    for k, v in enumerate(list(d2) + [99]):
+        if v < 0.6: run += 1
+        else:
+            if run >= 6: fz.append((round((k - run) / 30, 2), round(k / 30, 2)))
+            run = 0
+    print(f"   FREEZES (>=0.2s): {fz or 'none'}")
     # dead air: any stretch with no words (silence OR a dragged "uhhh") the viewer has to sit through
     dur = len(a) / 16000
     gaps = []
