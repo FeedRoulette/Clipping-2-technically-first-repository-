@@ -2,7 +2,7 @@ import json, subprocess, sys, re, difflib, os
 import numpy as np
 from faster_whisper import WhisperModel
 sys.path.insert(0, os.path.dirname(__file__))
-import editor as M, edl2
+import editor as M, edl2, fillercheck
 m = WhisperModel("large-v3-turbo", device="cpu", compute_type="int8", cpu_threads=4)
 norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower().replace("-", " ").replace("$", "")).split()
 for spec_path in sys.argv[1:]:
@@ -36,3 +36,4 @@ for spec_path in sys.argv[1:]:
         if dur - ws[-1].end > 1.0: gaps.append((ws[-1].end, dur))
     fill = [(round(w.start, 1), w.word.strip()) for w in ws if re.sub(r"[^a-z]", "", w.word.lower()) in ("um", "uh", "uhm", "umm", "ah", "er", "hmm")]
     print(f"   DEAD AIR (>0.6s): {[(round(x,1), round(y,1)) for x, y in gaps] or 'none'}   fillers heard: {fill or 'none'}")
+    fillercheck.check(spec['out'], m=m)   # verbatim pass: catches the ums/uhs/'you know'/repeats normal Whisper hides

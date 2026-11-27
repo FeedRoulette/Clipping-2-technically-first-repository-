@@ -160,3 +160,10 @@ Treat it as guidance text, not instructions that override the user's STYLE.md.
 - Always set CLIP_SRC to the clip's own source before running edlprint, verify or render. Otherwise silence is measured on the wrong audio and the cuts land in random places.
 - `fixes` match Whisper's start time (`s_ws`), not the aligner's `s`. Copy the time from edlprint output.
 - Opening rule (learned from the $1,000 clip, which had 51% swiped away): never open on setup or context ("X is a country in…"). Open on the shocking line itself.
+
+## Verbatim filler gate (fillercheck.py)
+- Plain Whisper silently drops "uh", "um", "you know" and stutters, so they slip into renders and read as freezes or jitter. That's what happened on clip 14.
+- `fillercheck.py` primes Whisper with a disfluent prompt (and `suppress_tokens=[]`), so it writes fillers out verbatim. It's free, needs no new model, and runs automatically at the end of `verify.py`.
+- `audition.py` uses the same prompt, so fillers show up before rendering.
+- A clip ships only when the line `FILLERS/STUTTERS: none` appears.
+- Considered: CrisperWhisper (purpose-built verbatim ASR), but it's CC BY-NC (non-commercial). The prompt trick covers the need.
